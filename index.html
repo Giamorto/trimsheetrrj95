@@ -1068,6 +1068,35 @@ const PDF_LANDING_CALC = {
   fuelTop: 334.0,
   lwTop: 344.9
 };
+
+// Exact digit-cell boundaries on the main grid (edges; N+1 edges = N cells)
+const PDF_CELLS = {
+  noPax: [112.35, 123.95, 135.54, 147.13],
+  weight: [151.3, 162.9, 174.5, 186.1, 197.7, 209.3],
+  indexNeg: [213.7, 225.3, 236.9, 248.5, 260.1],
+  indexPos: [260.1, 271.7, 283.3, 294.8, 306.4]
+};
+
+// Passenger reference table: which x to circle for the season's weight column
+const PDF_PAX_WEIGHT_X = {
+  summer: 634.5,
+  winter: 660.0
+};
+
+// Big CG-envelope graph calibration (Index axis bottom, Aircraft-weight axis left)
+const PDF_GRAPH = {
+  indexX0: 64.379,
+  indexUnit: 7.8982,
+  // x = indexX0 + (index-20)*indexUnit
+  weightTop0: 410.97,
+  weightUnitPerKg: -0.0059264 // top = weightTop0 + (weight-50000)*weightUnitPerKg
+};
+function graphXY(index, weight) {
+  return {
+    x: PDF_GRAPH.indexX0 + (index - 20) * PDF_GRAPH.indexUnit,
+    top: PDF_GRAPH.weightTop0 + (weight - 50000) * PDF_GRAPH.weightUnitPerKg
+  };
+}
 function nearestIdx(arr, val) {
   let best = 0,
     bd = Infinity;
@@ -1308,9 +1337,13 @@ async function buildAndDownloadPdf(data) {
   const H = PDF_PAGE.height;
   const blue = rgb(0.07, 0.2, 0.55);
   const red = rgb(0.82, 0.1, 0.1);
+  const amber = rgb(0.85, 0.45, 0.0);
+  const magenta = rgb(0.78, 0.1, 0.55);
   const y = top => H - top;
+
+  // Free-form right-aligned text (used only for header fields, which aren't boxed digit grids)
   function drawRight(text, rightX, top, {
-    size = 8,
+    size = 8.5,
     bold = false,
     color = blue
   } = {}) {
@@ -1325,21 +1358,83 @@ async function buildAndDownloadPdf(data) {
       color
     });
   }
+
+  // Places one character per cell, right-aligned into the given cell-edge array.
+  // cellEdges has N+1 edges describing N cells, e.g. [151.3,162.9,...,209.3] = 5 cells.
+  function drawInCells(chars, cellEdges, top, {
+    size = 8.5,
+    bold = false,
+    color = blue
+  } = {}) {
+    const nCells = cellEdges.length - 1;
+    const start = nCells - chars.length; // left padding (blank cells)
+    const f = bold ? fontBold : font;
+    chars.forEach((ch, i) => {
+      if (!ch) return;
+      const cellIdx = start + i;
+      if (cellIdx < 0 || cellIdx >= nCells) return;
+      const cl = cellEdges[cellIdx],
+        cr = cellEdges[cellIdx + 1];
+      const cx = (cl + cr) / 2;
+      const w = f.widthOfTextAtSize(ch, size);
+      page.drawText(ch, {
+        x: cx - w / 2,
+        y: y(top) - size * 0.34,
+        size,
+        font: f,
+        color
+      });
+    });
+  }
   function circle(cx, top, {
     rx = 10,
-    ry = 6.5
+    ry = 6.5,
+    color = red
   } = {}) {
     page.drawEllipse({
       x: cx,
       y: y(top) - 1.5,
       xScale: rx,
       yScale: ry,
-      borderColor: red,
+      borderColor: color,
       borderWidth: 1.1
     });
   }
-  const idxStr = v => v === null || v === undefined ? "" : (v >= 0 ? "+" : "") + v.toFixed(1).replace("-", "");
-  const idxCol = v => v < 0 ? PDF_COLS.indexNeg : PDF_COLS.indexPos;
+  function graphDot(index, weight, color) {
+    const {
+      x,
+      top
+    } = graphXY(index, weight);
+    page.drawCircle({
+      x,
+      y: y(top),
+      size: 3,
+      color
+    });
+  }
+
+  // Weight → array of digit chars, right-aligned (blanks = unused leading cells)
+  const weightChars = w => Math.round(Math.max(0, w)).toString().split("");
+  const paxCountChars = n => Math.round(Math.max(0, n)).toString().split("");
+  // Index magnitude → digits placed in cells 0,1,3 (cell 2 is skipped: the
+  // template already has a printed "." there — drawing our own caused a double dot)
+  function indexChars(v) {
+    const abs = Math.abs(v);
+    const intPart = Math.floor(abs + 1e-6);
+    const tenths = Math.round(abs * 10) % 10;
+    const tens = intPart >= 10 ? String(Math.floor(intPart / 10)) : "";
+    return [tens, String(intPart % 10), null, String(tenths)];
+  }
+  const idxCells = v => v < 0 ? PDF_CELLS.indexNeg : PDF_CELLS.indexPos;
+  function writeWeight(w, top, opts) {
+    drawInCells(weightChars(w), PDF_CELLS.weight, top, opts);
+  }
+  function writeIndex(v, top, opts) {
+    drawInCells(indexChars(v), idxCells(v), top, opts);
+  }
+  function writePax(n, top, opts) {
+    drawInCells(paxCountChars(n), PDF_CELLS.noPax, top, opts);
+  }
 
   // ---- HEADER ----
   drawRight(data.flightNo, PDF_HEADER.flightNo.x + 85, PDF_HEADER.flightNo.top, {
@@ -1374,18 +1469,25 @@ async function buildAndDownloadPdf(data) {
   data.cargoEntries.forEach(c => {
     const rowTop = PDF_ROWS[compRowKey[c.code]];
     if (c.weight > 0) {
-      drawRight(String(Math.round(c.weight)), PDF_COLS.weight, rowTop);
-      drawRight(idxStr(c.index), idxCol(c.index), rowTop);
-      // circle nearest reference-table row for this compartment
+      writeWeight(c.weight, rowTop);
+      writeIndex(c.index, rowTop);
+      // circle nearest reference-table row for this compartment — weight AND index
       const ref = PDF_COMPARTMENTS[c.code];
       const i = nearestIdx(ref.weights, c.weight);
-      circle(ref.indexX + 8, ref.tops[i]);
+      circle(ref.weightX + 8, ref.tops[i], {
+        rx: 9,
+        ry: 6
+      });
+      circle(ref.indexX + 8, ref.tops[i], {
+        rx: 9,
+        ry: 6
+      });
     }
   });
-  drawRight(String(Math.round(data.dryOpTotalW)), PDF_COLS.weight, PDF_ROWS.dryOpTotal, {
+  writeWeight(data.dryOpTotalW, PDF_ROWS.dryOpTotal, {
     bold: true
   });
-  drawRight(idxStr(data.dryOpTotalI), idxCol(data.dryOpTotalI), PDF_ROWS.dryOpTotal, {
+  writeIndex(data.dryOpTotalI, PDF_ROWS.dryOpTotal, {
     bold: true
   });
 
@@ -1400,88 +1502,122 @@ async function buildAndDownloadPdf(data) {
   data.zoneEntries.forEach(z => {
     const rowTop = PDF_ROWS[zoneRowKey[z.zone]];
     if (z.totalPax > 0) {
-      drawRight(String(z.totalPax), PDF_COLS.noPax, rowTop);
-      drawRight(String(Math.round(z.weight)), PDF_COLS.weight, rowTop);
-      drawRight(idxStr(z.index), idxCol(z.index), rowTop);
-      // circle the passenger reference table row (by pax count in that zone)
+      writePax(z.totalPax, rowTop);
+      writeWeight(z.weight, rowTop);
+      writeIndex(z.index, rowTop);
+      // circle the passenger reference table row (by pax count in that zone):
+      // the season-appropriate weight column AND the zone's index column
       const n = Math.max(1, Math.min(25, z.totalPax));
       const top = PDF_PAX.topStart + (n - 1) * PDF_PAX.rowStep;
+      const wx = PDF_PAX_WEIGHT_X[data.season] ?? PDF_PAX_WEIGHT_X.summer;
+      circle(wx + 9, top, {
+        rx: 11,
+        ry: 6
+      });
       circle(PDF_PAX.cols[z.zone] + 9, top, {
         rx: 11,
         ry: 6
       });
     }
   });
-  drawRight(String(data.paxTotalCount), PDF_COLS.noPax, PDF_ROWS.deadLoadTotal, {
+  writePax(data.paxTotalCount, PDF_ROWS.deadLoadTotal, {
     bold: true
   });
-  drawRight(String(Math.round(data.deadLoadW)), PDF_COLS.weight, PDF_ROWS.deadLoadTotal, {
+  writeWeight(data.deadLoadW, PDF_ROWS.deadLoadTotal, {
     bold: true
   });
-  drawRight(idxStr(data.deadLoadI), idxCol(data.deadLoadI), PDF_ROWS.deadLoadTotal, {
+  writeIndex(data.deadLoadI, PDF_ROWS.deadLoadTotal, {
     bold: true
   });
 
   // ---- ZERO FUEL / RAMP-TAXI / TAKEOFF / LANDING ----
-  drawRight(String(Math.round(data.zfw)), PDF_COLS.weight, PDF_ROWS.zeroFuel, {
+  writeWeight(data.zfw, PDF_ROWS.zeroFuel, {
     bold: true
   });
-  drawRight(idxStr(data.zfi), idxCol(data.zfi), PDF_ROWS.zeroFuel, {
+  writeIndex(data.zfi, PDF_ROWS.zeroFuel, {
     bold: true
   });
   if (data.totalFuelN > 0) {
-    drawRight(String(Math.round(data.totalFuelN)), PDF_COLS.weight, PDF_ROWS.totalFuel);
-    drawRight(idxStr(data.fuelIdxTotal), idxCol(data.fuelIdxTotal), PDF_ROWS.totalFuel);
+    writeWeight(data.totalFuelN, PDF_ROWS.totalFuel);
+    writeIndex(data.fuelIdxTotal, PDF_ROWS.totalFuel);
     if (data.totalFuelN >= PDF_FUEL.weights[0]) {
       const i = nearestIdx(PDF_FUEL.weights, data.totalFuelN);
-      circle(PDF_FUEL.indexX, PDF_FUEL.topStart + i * PDF_FUEL.rowStep);
+      const t = PDF_FUEL.topStart + i * PDF_FUEL.rowStep;
+      circle(352, t, {
+        rx: 13,
+        ry: 6
+      });
+      circle(PDF_FUEL.indexX, t, {
+        rx: 9,
+        ry: 6
+      });
     }
   }
-  drawRight(String(Math.round(data.rampW)), PDF_COLS.weight, PDF_ROWS.rampTaxi, {
+  writeWeight(data.rampW, PDF_ROWS.rampTaxi, {
     bold: true
   });
-  drawRight(idxStr(data.rampI), idxCol(data.rampI), PDF_ROWS.rampTaxi, {
+  writeIndex(data.rampI, PDF_ROWS.rampTaxi, {
     bold: true
   });
   if (data.taxiFuelN > 0) {
-    drawRight(String(Math.round(data.taxiFuelN)), PDF_COLS.weight, PDF_ROWS.taxiFuel);
-    drawRight(idxStr(data.taxiFuelIdx), idxCol(data.taxiFuelIdx), PDF_ROWS.taxiFuel);
+    writeWeight(data.taxiFuelN, PDF_ROWS.taxiFuel);
+    writeIndex(data.taxiFuelIdx, PDF_ROWS.taxiFuel);
     if (data.taxiFuelN >= PDF_FUEL.weights[0]) {
       const i = nearestIdx(PDF_FUEL.weights, data.taxiFuelN);
-      circle(PDF_FUEL.indexX, PDF_FUEL.topStart + i * PDF_FUEL.rowStep);
+      const t = PDF_FUEL.topStart + i * PDF_FUEL.rowStep;
+      circle(352, t, {
+        rx: 13,
+        ry: 6
+      });
+      circle(PDF_FUEL.indexX, t, {
+        rx: 9,
+        ry: 6
+      });
     }
   }
-  drawRight(String(Math.round(data.tow)), PDF_COLS.weight, PDF_ROWS.takeoff, {
+  writeWeight(data.tow, PDF_ROWS.takeoff, {
     bold: true
   });
-  drawRight(idxStr(data.toi), idxCol(data.toi), PDF_ROWS.takeoff, {
+  writeIndex(data.toi, PDF_ROWS.takeoff, {
     bold: true
   });
   if (data.tripFuelN > 0) {
-    drawRight(String(Math.round(data.tripFuelN)), PDF_COLS.weight, PDF_ROWS.estFuelUsed);
+    writeWeight(data.tripFuelN, PDF_ROWS.estFuelUsed);
   }
-  drawRight(String(Math.round(data.lw)), PDF_COLS.weight, PDF_ROWS.landing, {
+  writeWeight(data.lw, PDF_ROWS.landing, {
     bold: true
   });
-  drawRight(idxStr(data.li), idxCol(data.li), PDF_ROWS.landing, {
+  writeIndex(data.li, PDF_ROWS.landing, {
     bold: true
   });
   if (data.landingFuelW > 0 && data.landingFuelW >= PDF_FUEL.weights[0]) {
     const i = nearestIdx(PDF_FUEL.weights, data.landingFuelW);
-    circle(PDF_FUEL.indexX, PDF_FUEL.topStart + i * PDF_FUEL.rowStep);
+    const t = PDF_FUEL.topStart + i * PDF_FUEL.rowStep;
+    circle(352, t, {
+      rx: 13,
+      ry: 6
+    });
+    circle(PDF_FUEL.indexX, t, {
+      rx: 9,
+      ry: 6
+    });
   }
 
   // ---- Landing Index calculation box ----
-  drawRight(idxStr(data.zfi), PDF_LANDING_CALC.xRight, PDF_LANDING_CALC.zfwTop, {
+  drawRight((data.zfi >= 0 ? "+" : "-") + Math.abs(data.zfi).toFixed(1), PDF_LANDING_CALC.xRight, PDF_LANDING_CALC.zfwTop, {
     size: 8
   });
-  drawRight(idxStr(data.landingFuelIdx), PDF_LANDING_CALC.xRight, PDF_LANDING_CALC.fuelTop, {
+  drawRight((data.landingFuelIdx >= 0 ? "+" : "-") + Math.abs(data.landingFuelIdx).toFixed(1), PDF_LANDING_CALC.xRight, PDF_LANDING_CALC.fuelTop, {
     size: 8
   });
-  drawRight(idxStr(data.li), PDF_LANDING_CALC.xRight, PDF_LANDING_CALC.lwTop, {
+  drawRight((data.li >= 0 ? "+" : "-") + Math.abs(data.li).toFixed(1), PDF_LANDING_CALC.xRight, PDF_LANDING_CALC.lwTop, {
     size: 8,
     bold: true
   });
+
+  // ---- Mark TOW/TOI and LW/LI on the big CG-envelope graph ----
+  graphDot(data.toi, data.tow, amber);
+  graphDot(data.li, data.lw, magenta);
   const pdfBytes = await pdfDoc.save();
   const blob = new Blob([pdfBytes], {
     type: "application/pdf"
@@ -1697,6 +1833,7 @@ function App() {
         from,
         to,
         date,
+        season,
         crew: `${crewFlight}/${crewCabin}`,
         cargoEntries,
         dryOpTotalW,
