@@ -23,7 +23,7 @@
   html,body{margin:0;padding:0;}
   body{
     background:var(--bg); color:var(--text);
-    font-family:-apple-system,'Segoe UI',Roboto,system-ui,sans-serif;
+    font-family:system-ui,sans-serif;
     -webkit-font-smoothing:antialiased;
     padding-bottom:48px;
     transition:background .2s,color .2s;
@@ -74,7 +74,7 @@
     -webkit-appearance:none;appearance:none;
   }
   input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,194,51,0.18);}
-  select{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;}
+  select{font-family:system-ui,sans-serif;}
   input[type="date"]{line-height:46px;}
 
   .compline{
@@ -1003,7 +1003,6 @@ const PDF_COLS = {
   indexPos: 303
 };
 const PDF_ROWS = {
-  dow: 113.35,
   fwd11: 124.95,
   fwd12: 136.5,
   fwd13: 148.1,
@@ -1152,18 +1151,6 @@ const MAC_FIT = {
 function calcMAC(index, weight) {
   if (!weight) return null;
   return ((index - MAC_FIT.I0) / weight - MAC_FIT.P) / MAC_FIT.Q;
-}
-function nearestIdx(arr, val) {
-  let best = 0,
-    bd = Infinity;
-  arr.forEach((v, i) => {
-    const d = Math.abs(v - val);
-    if (d < bd) {
-      bd = d;
-      best = i;
-    }
-  });
-  return best;
 }
 
 // Returns the row index(es) to circle: a single exact match, or the two
@@ -2412,7 +2399,6 @@ function App() {
       color: "var(--text2)"
     }
   }, group), cargoEntries.filter(c => c.group === group).map(c => {
-    const over = c.weight > c.max;
     return /*#__PURE__*/React.createElement("div", {
       className: "compline",
       key: c.code
@@ -2429,10 +2415,7 @@ function App() {
         setCargoVal(c.code, v);
       }
     }), /*#__PURE__*/React.createElement("div", {
-      className: "max",
-      style: over ? {
-        color: "var(--danger)"
-      } : {}
+      className: "max"
     }, "max ", c.max, " kg")), /*#__PURE__*/React.createElement("div", {
       className: "idxval mono"
     }, fmtKg(c.weight), " kg"), /*#__PURE__*/React.createElement("div", {
