@@ -957,6 +957,29 @@ const STAB_ROWS = [28000, 30000, 32000, 34000, 36000, 38000, 40000, 42000, 44000
 const STAB_FLAPS1F = [[-2.5, -2.2, -1.9, -1.5, -1.2, -0.9, -0.6, -0.2, -0.2, -0.2, -0.2, -0.2, -0.2], [-2.9, -2.6, -2.2, -1.9, -1.5, -1.2, -0.9, -0.5, -0.2, -0.2, -0.2, -0.2, -0.2], [-3.2, -2.9, -2.5, -2.1, -1.8, -1.4, -1.1, -0.7, -0.4, -0.2, -0.2, -0.2, -0.2], [-3.4, -3.1, -2.7, -2.3, -2.0, -1.6, -1.2, -0.9, -0.5, -0.2, -0.2, -0.2, -0.2], [-3.6, -3.2, -2.8, -2.5, -2.1, -1.7, -1.4, -1.0, -0.6, -0.3, -0.2, -0.2, -0.2], [-3.8, -3.4, -3.0, -2.6, -2.3, -1.9, -1.5, -1.1, -0.8, -0.4, -0.2, -0.2, -0.2], [-3.9, -3.5, -3.2, -2.8, -2.4, -2.0, -1.7, -1.3, -0.9, -0.6, -0.2, -0.2, -0.2], [-4.1, -3.7, -3.3, -2.9, -2.6, -2.2, -1.8, -1.4, -1.1, -0.7, -0.3, -0.2, -0.2], [-4.3, -3.9, -3.5, -3.1, -2.7, -2.3, -2.0, -1.6, -1.2, -0.9, -0.5, -0.2, -0.2], [-4.5, -4.1, -3.7, -3.3, -2.9, -2.5, -2.1, -1.8, -1.4, -1.0, -0.7, -0.3, -0.2], [-4.7, -4.3, -3.9, -3.5, -3.1, -2.7, -2.3, -2.0, -1.6, -1.2, -0.9, -0.5, -0.2], [-4.9, -4.5, -4.1, -3.7, -3.3, -2.9, -2.5, -2.1, -1.8, -1.4, -1.0, -0.7, -0.3]];
 const STAB_FLAPS2 = [[-1.9, -1.6, -1.2, -0.9, -0.6, -0.3, -0.2, -0.2, -0.2, -0.2, -0.2, -0.2, -0.2], [-2.4, -2.1, -1.7, -1.3, -0.9, -0.6, -0.3, -0.2, -0.2, -0.2, -0.2, -0.2, -0.2], [-2.9, -2.5, -2.1, -1.7, -1.3, -0.9, -0.6, -0.2, -0.2, -0.2, -0.2, -0.2, -0.2], [-3.4, -3.0, -2.6, -2.1, -1.7, -1.3, -0.9, -0.5, -0.2, -0.2, -0.2, -0.2, -0.2], [-3.9, -3.5, -3.0, -2.6, -2.1, -1.6, -1.2, -0.8, -0.3, -0.2, -0.2, -0.2, -0.2], [-4.4, -3.9, -3.4, -2.9, -2.4, -1.9, -1.5, -1.0, -0.6, -0.2, -0.2, -0.2, -0.2], [-4.7, -4.1, -3.6, -3.1, -2.6, -2.1, -1.6, -1.2, -0.7, -0.3, -0.2, -0.2, -0.2], [-4.9, -4.3, -3.7, -3.2, -2.8, -2.3, -1.8, -1.3, -0.9, -0.4, -0.2, -0.2, -0.2], [-5.1, -4.5, -3.9, -3.4, -2.9, -2.4, -1.9, -1.5, -1.0, -0.6, -0.2, -0.2, -0.2], [-5.3, -4.7, -4.0, -3.5, -3.1, -2.6, -2.1, -1.6, -1.1, -0.7, -0.2, -0.2, -0.2], [-5.5, -4.9, -4.3, -3.8, -3.3, -2.8, -2.3, -1.8, -1.3, -0.8, -0.4, -0.2, -0.2], [-5.7, -5.1, -4.5, -4.0, -3.5, -3.0, -2.5, -2.0, -1.5, -1.0, -0.5, -0.2, -0.2]];
 
+// Bilinear interpolation over the Stab Trim Setting table (weight × %MAC -> degrees)
+function interpStab(table, weight, mac) {
+  const w = Math.max(STAB_ROWS[0], Math.min(STAB_ROWS[STAB_ROWS.length - 1], weight));
+  const m = Math.max(STAB_COLS[0], Math.min(STAB_COLS[STAB_COLS.length - 1], mac));
+  let i = 0;
+  while (i < STAB_ROWS.length - 2 && STAB_ROWS[i + 1] < w) i++;
+  let j = 0;
+  while (j < STAB_COLS.length - 2 && STAB_COLS[j + 1] < m) j++;
+  const w0 = STAB_ROWS[i],
+    w1 = STAB_ROWS[i + 1];
+  const m0 = STAB_COLS[j],
+    m1 = STAB_COLS[j + 1];
+  const tw = w1 > w0 ? (w - w0) / (w1 - w0) : 0;
+  const tm = m1 > m0 ? (m - m0) / (m1 - m0) : 0;
+  const v00 = table[i][j],
+    v01 = table[i][j + 1],
+    v10 = table[i + 1][j],
+    v11 = table[i + 1][j + 1];
+  const v0 = v00 + (v01 - v00) * tm;
+  const v1 = v10 + (v11 - v10) * tm;
+  return v0 + (v1 - v0) * tw;
+}
+
 /* ============================================================
    PDF EXPORT COORDINATE MAP
    All coordinates measured on the flattened official Trim Sheet
@@ -1104,7 +1127,9 @@ const PDF_STAB = {
   },
   flaps2: {
     tops: [489.2, 495.2, 501.1, 507.1, 513.1, 519.1, 525.1, 531.1, 537.1, 543.1, 549.1, 555.0]
-  }
+  },
+  stabToX: 638,
+  stabToTop: 543.6
 };
 
 // Exact digit-cell boundaries on the main grid (edges; N+1 edges = N cells)
@@ -1755,13 +1780,13 @@ async function buildAndDownloadPdf(data) {
       // circle the passenger reference table row (by pax count in that zone):
       // the season-appropriate weight column AND the zone's index column
       const n = Math.max(1, Math.min(25, z.totalPax));
-      const top = PDF_PAX.topStart + (n - 1) * PDF_PAX.rowStep;
+      const top = PDF_PAX.topStart + (n - 1) * PDF_PAX.rowStep + 2;
       const wx = PDF_PAX_WEIGHT_X[data.season] ?? PDF_PAX_WEIGHT_X.summer;
-      circle(wx + 9, top, {
+      circle(wx + 4, top, {
         rx: 11,
         ry: 6
       });
-      circle(PDF_PAX.cols[z.zone] + 9, top, {
+      circle(PDF_PAX.cols[z.zone] + 4, top, {
         rx: 11,
         ry: 6
       });
@@ -1838,6 +1863,13 @@ async function buildAndDownloadPdf(data) {
   drawRight((data.landingFuelIdx >= 0 ? "+" : "-") + Math.abs(data.landingFuelIdx).toFixed(1), PDF_LANDING_CALC.xRight, PDF_LANDING_CALC.fuelTop, {
     size: 8
   });
+  page.drawText(`(${Math.round(data.landingFuelW)} kg)`, {
+    x: PDF_LANDING_CALC.xRight + 8,
+    y: y(PDF_LANDING_CALC.fuelTop) - 2.5,
+    size: 7,
+    font,
+    color: rgb(0.5, 0.5, 0.5)
+  });
   drawRight((data.li >= 0 ? "+" : "-") + Math.abs(data.li).toFixed(1), PDF_LANDING_CALC.xRight, PDF_LANDING_CALC.lwTop, {
     size: 8,
     bold: true
@@ -1891,6 +1923,16 @@ async function buildAndDownloadPdf(data) {
         });
       }));
     });
+    // Write the interpolated stabilizer setting (for the selected flaps config) into STAB TO:
+    const stabTable = data.flapsConfig === "2" ? STAB_FLAPS2 : STAB_FLAPS1F;
+    const stabVal = interpStab(stabTable, data.tow, macTOW);
+    page.drawText(stabVal.toFixed(1) + "°", {
+      x: PDF_STAB.stabToX,
+      y: y(PDF_STAB.stabToTop) - 3,
+      size: 8,
+      font: fontBold,
+      color: blue
+    });
   }
   const pdfBytes = await pdfDoc.save();
   const blob = new Blob([pdfBytes], {
@@ -1923,6 +1965,7 @@ function App() {
 
   // season (global standard pax weight)
   const [season, setSeason] = useState("summer"); // summer | winter
+  const [flapsConfig, setFlapsConfig] = useState("1F"); // "1F" | "2"
 
   // DOW / DOI
   const [dow, setDow] = useState(24500);
@@ -2126,6 +2169,7 @@ function App() {
         to,
         date,
         season,
+        flapsConfig,
         crew: `${crewFlight}/${crewCabin}`,
         cargoEntries,
         dryOpTotalW,
@@ -2584,7 +2628,23 @@ function App() {
     className: "macrow"
   }, "%MAC (TOW): ", /*#__PURE__*/React.createElement("b", {
     className: "mono"
-  }, calcMAC(toi, tow)?.toFixed(1)))), /*#__PURE__*/React.createElement("div", {
+  }, calcMAC(toi, tow)?.toFixed(1))), /*#__PURE__*/React.createElement("div", {
+    className: "pillrow",
+    style: {
+      marginTop: 8,
+      marginBottom: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "pill" + (flapsConfig === "1F" ? " active" : ""),
+    onClick: () => setFlapsConfig("1F")
+  }, "FLAPS 1+F"), /*#__PURE__*/React.createElement("div", {
+    className: "pill" + (flapsConfig === "2" ? " active" : ""),
+    onClick: () => setFlapsConfig("2")
+  }, "FLAPS 2")), /*#__PURE__*/React.createElement("div", {
+    className: "macrow"
+  }, "STAB TO: ", /*#__PURE__*/React.createElement("b", {
+    className: "mono"
+  }, interpStab(flapsConfig === "1F" ? STAB_FLAPS1F : STAB_FLAPS2, tow, calcMAC(toi, tow)).toFixed(1), "°"))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
@@ -2607,7 +2667,9 @@ function App() {
     className: "helper"
   }, "Landing Fuel = Total Fuel − Taxi Fuel − Trip Fuel (топливо на взлёте минус трип фьюел)."), taxiFuelN + tripFuelN > totalFuelN && totalFuelN > 0 && /*#__PURE__*/React.createElement("div", {
     className: "limitline limitline-bad"
-  }, "⚠ Taxi+Trip Fuel (", fmtKg(taxiFuelN + tripFuelN), " kg) больше Total Fuel (", fmtKg(totalFuelN), " kg) — проверь цифры"), /*#__PURE__*/React.createElement("div", {
+  }, "⚠ Taxi+Trip Fuel (", fmtKg(taxiFuelN + tripFuelN), " kg) больше Total Fuel (", fmtKg(totalFuelN), " kg) — проверь цифры"), landingFuelW < 800 && totalFuelN > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "limitline limitline-bad"
+  }, "⚠ Landing Fuel ", fmtKg(landingFuelW), " kg — меньше 800 кг, проверь остаток/резерв"), /*#__PURE__*/React.createElement("div", {
     className: "idxrow"
   }, /*#__PURE__*/React.createElement("span", null, "Landing Fuel Index (", fmtKg(landingFuelW), " kg)"), /*#__PURE__*/React.createElement("span", {
     className: "mono"
