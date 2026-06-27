@@ -1616,8 +1616,7 @@ async function buildAndDownloadPdf(data) {
     size: 9
   });
 
-  // ---- DRY OPERATING: compartments (individual rows only — DOW is folded into
-  // the DEAD LOAD total below, not written as its own line on this form) ----
+  // ---- DRY OPERATING: compartments ----
   const compRowKey = {
     "11": "fwd11",
     "12": "fwd12",
@@ -1646,6 +1645,13 @@ async function buildAndDownloadPdf(data) {
         });
       });
     }
+  });
+  // DOW/DOI become visible here, combined with compartments (the form's own TOTAL row)
+  writeWeight(data.dryOpTotalW, PDF_ROWS.dryOpTotal, {
+    bold: true
+  });
+  writeIndex(data.dryOpTotalI, PDF_ROWS.dryOpTotal, {
+    bold: true
   });
 
   // ---- DEAD LOAD: passenger zones ----
@@ -1897,13 +1903,17 @@ function App() {
   const paxTotalI = zoneEntries.reduce((s, z) => s + z.index, 0);
   const paxTotalCount = zoneEntries.reduce((s, z) => s + z.totalPax, 0);
 
-  // ---- DEAD LOAD = DOW + compartments + passengers (combined per ops convention) ----
-  const deadLoadW = dow + cargoTotalW + paxTotalW;
-  const deadLoadI = doi + cargoTotalI + paxTotalI;
+  // ---- DRY OPERATING TOTAL = DOW + compartments (this is where DOW/DOI become visible) ----
+  const dryOpTotalW = dow + cargoTotalW;
+  const dryOpTotalI = doi + cargoTotalI;
+
+  // ---- DEAD LOAD TOTAL = passengers only ----
+  const deadLoadW = paxTotalW;
+  const deadLoadI = paxTotalI;
 
   // ---- ZERO FUEL ----
-  const zfw = deadLoadW;
-  const zfi = deadLoadI;
+  const zfw = dryOpTotalW + deadLoadW;
+  const zfi = dryOpTotalI + deadLoadI;
 
   // ---- RAMP / TAXI ----
   const totalFuelN = Number(totalFuel) || 0;
@@ -1987,6 +1997,8 @@ function App() {
         season,
         crew: `${crewFlight}/${crewCabin}`,
         cargoEntries,
+        dryOpTotalW,
+        dryOpTotalI,
         zoneEntries,
         paxTotalCount,
         deadLoadW,
@@ -2264,8 +2276,20 @@ function App() {
   }, fmtKg(cargoTotalW), /*#__PURE__*/React.createElement("span", {
     className: "unit"
   }, "kg"), " \xA0 ", cargoTotalI >= 0 ? "+" : "", fmt1(cargoTotalI))), /*#__PURE__*/React.createElement("div", {
-    className: "helper"
-  }, "Войдёт в DEAD LOAD TOTAL вместе с DOW и пассажирами.")), /*#__PURE__*/React.createElement("div", {
+    className: "totalrow",
+    style: {
+      borderTop: "1px solid var(--border)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tlabel",
+    style: {
+      color: "var(--accent)"
+    }
+  }, "DRY OPERATING TOTAL (DOW + compartments)"), /*#__PURE__*/React.createElement("div", {
+    className: "tval"
+  }, fmtKg(dryOpTotalW), /*#__PURE__*/React.createElement("span", {
+    className: "unit"
+  }, "kg"), " \xA0 ", dryOpTotalI >= 0 ? "+" : "", fmt1(dryOpTotalI)))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
@@ -2315,7 +2339,7 @@ function App() {
     style: {
       color: "var(--accent)"
     }
-  }, "DEAD LOAD TOTAL (DOW + груз + пассажиры · ", paxTotalCount, " чел.)"), /*#__PURE__*/React.createElement("div", {
+  }, "DEAD LOAD TOTAL (passengers · ", paxTotalCount, " чел.)"), /*#__PURE__*/React.createElement("div", {
     className: "tval"
   }, fmtKg(deadLoadW), /*#__PURE__*/React.createElement("span", {
     className: "unit"
