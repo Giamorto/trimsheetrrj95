@@ -156,6 +156,11 @@
     text-transform:uppercase;vertical-align:1px;
   }
   .autofield{color:var(--accent2)!important;border-color:var(--accent2)!important;font-weight:700;}
+  .macrow{
+    margin-top:8px;padding:8px 10px;border-radius:7px;background:var(--surface2);
+    border:1px solid var(--border);font-size:13px;color:var(--text2);
+  }
+  .macrow b{color:var(--accent);font-size:15px;}
   .pdfready{margin-top:10px;display:flex;flex-direction:column;gap:8px;}
   .exportbtn-ready{
     display:block;text-align:center;text-decoration:none;
@@ -1106,6 +1111,23 @@ function graphXY(index, weight) {
     top: PDF_GRAPH.weightTop0 + (weight - 50000) * PDF_GRAPH.weightUnitPerKg
   };
 }
+
+// %MAC lines on the chart are straight in (Index, Weight) space and all
+// converge at one common point — confirmed by computing pairwise line
+// intersections from the PDF's own vector data (Weight0≈0, Index0≈30.35,
+// stdev 0.14 across 10 independent line-pairs). Each line's slope varies
+// linearly with %MAC, giving:
+//   Index = I0 + (P + Q*MAC) * Weight
+//   MAC = [(Index-I0)/Weight - P] / Q
+const MAC_FIT = {
+  I0: 30.33,
+  P: -0.00055862,
+  Q: 0.00003065
+};
+function calcMAC(index, weight) {
+  if (!weight) return null;
+  return ((index - MAC_FIT.I0) / weight - MAC_FIT.P) / MAC_FIT.Q;
+}
 function nearestIdx(arr, val) {
   let best = 0,
     bd = Infinity;
@@ -1527,6 +1549,56 @@ async function buildAndDownloadPdf(data) {
     });
   }
 
+  // Draws the %MAC line that passes through the given point, clipped to the
+  // chart's index/weight box, with a numeric label at the edge — matching the
+  // style of the chart's own printed %MAC lines (13,14,...,33).
+  function graphMacLine(index, weight, color) {
+    const mac = calcMAC(index, weight);
+    const slope = MAC_FIT.P + MAC_FIT.Q * mac; // Index = I0 + slope*Weight
+    let w1 = 26000,
+      w2 = 50000;
+    let i1 = MAC_FIT.I0 + slope * w1,
+      i2 = MAC_FIT.I0 + slope * w2;
+    // clip to index range [20,50] by recomputing the weight at the crossing
+    if (i1 < 20) w1 = (20 - MAC_FIT.I0) / slope;
+    if (i1 > 50) w1 = (50 - MAC_FIT.I0) / slope;
+    if (i2 < 20) w2 = (20 - MAC_FIT.I0) / slope;
+    if (i2 > 50) w2 = (50 - MAC_FIT.I0) / slope;
+    i1 = MAC_FIT.I0 + slope * w1;
+    i2 = MAC_FIT.I0 + slope * w2;
+    const p1 = graphXY(i1, w1),
+      p2 = graphXY(i2, w2);
+    page.drawLine({
+      start: {
+        x: p1.x,
+        y: y(p1.top)
+      },
+      end: {
+        x: p2.x,
+        y: y(p2.top)
+      },
+      thickness: 1.1,
+      color
+    });
+    // label at whichever end sits at the top edge (or the higher point if neither is exactly at top)
+    const top1 = y(p1.top),
+      top2 = y(p2.top);
+    const labelPt = top1 >= top2 ? {
+      x: p1.x,
+      yv: top1
+    } : {
+      x: p2.x,
+      yv: top2
+    };
+    page.drawText(mac.toFixed(1), {
+      x: labelPt.x - 9,
+      y: labelPt.yv + 3,
+      size: 7.5,
+      font: fontBold,
+      color
+    });
+  }
+
   // Weight → array of digit chars, right-aligned (blanks = unused leading cells)
   const weightChars = w => Math.round(Math.max(0, w)).toString().split("");
   const paxCountChars = n => Math.round(Math.max(0, n)).toString().split("");
@@ -1760,6 +1832,8 @@ async function buildAndDownloadPdf(data) {
   });
 
   // ---- Mark TOW/TOI and LW/LI on the big CG-envelope graph ----
+  graphMacLine(data.toi, data.tow, amber);
+  graphMacLine(data.li, data.lw, magenta);
   graphCrosshair(data.toi, data.tow, amber);
   graphCrosshair(data.li, data.lw, magenta);
   graphArrow({
@@ -1771,6 +1845,26 @@ async function buildAndDownloadPdf(data) {
   }, rgb(0.5, 0.5, 0.5));
   graphDot(data.toi, data.tow, amber);
   graphDot(data.li, data.lw, magenta);
+  {
+    const pTOW = graphXY(data.toi, data.tow);
+    const macTOW = calcMAC(data.toi, data.tow);
+    page.drawText(`TOW ${macTOW.toFixed(1)}%MAC`, {
+      x: pTOW.x + 6,
+      y: y(pTOW.top) + 5,
+      size: 7,
+      font: fontBold,
+      color: amber
+    });
+    const pLW = graphXY(data.li, data.lw);
+    const macLW = calcMAC(data.li, data.lw);
+    page.drawText(`LDG ${macLW.toFixed(1)}%MAC`, {
+      x: pLW.x + 6,
+      y: y(pLW.top) - 9,
+      size: 7,
+      font: fontBold,
+      color: magenta
+    });
+  }
   const pdfBytes = await pdfDoc.save();
   const blob = new Blob([pdfBytes], {
     type: "application/pdf"
@@ -2423,8 +2517,10 @@ function App() {
     limit: LIMITS.TOW,
     unit: "kg"
   }), /*#__PURE__*/React.createElement("div", {
-    className: "helper"
-  }, "%MAC по графику ЦТ будет добавлен на следующем этапе (digitised envelope).")), /*#__PURE__*/React.createElement("div", {
+    className: "macrow"
+  }, "%MAC (TOW): ", /*#__PURE__*/React.createElement("b", {
+    className: "mono"
+  }, calcMAC(toi, tow)?.toFixed(1)))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
@@ -2470,7 +2566,11 @@ function App() {
     value: lw,
     limit: LIMITS.LW,
     unit: "kg"
-  })), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "macrow"
+  }, "%MAC (LDG): ", /*#__PURE__*/React.createElement("b", {
+    className: "mono"
+  }, calcMAC(li, lw)?.toFixed(1)))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
