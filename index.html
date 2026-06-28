@@ -172,6 +172,11 @@
     border:1px solid var(--border);font-size:13px;color:var(--text2);
   }
   .macrow b{color:var(--accent);font-size:15px;}
+  .applybtn{
+    background:var(--accent);color:var(--on-accent);border:none;border-radius:6px;
+    padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;
+  }
+  .applybtn:active{transform:scale(0.96);}
   .pdfready{margin-top:10px;display:flex;flex-direction:column;gap:8px;}
   .exportbtn-ready{
     display:block;text-align:center;text-decoration:none;
@@ -672,8 +677,8 @@ const DEFAULT_PAX_WEIGHTS = {
     winter: 80
   },
   child: {
-    summer: 35,
-    winter: 35
+    summer: 30,
+    winter: 30
   },
   infant: {
     summer: 15,
@@ -983,6 +988,964 @@ const STAB_COLS = [12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36];
 const STAB_ROWS = [28000, 30000, 32000, 34000, 36000, 38000, 40000, 42000, 44000, 46000, 48000, 49450];
 const STAB_FLAPS1F = [[-2.5, -2.2, -1.9, -1.5, -1.2, -0.9, -0.6, -0.2, -0.2, -0.2, -0.2, -0.2, -0.2], [-2.9, -2.6, -2.2, -1.9, -1.5, -1.2, -0.9, -0.5, -0.2, -0.2, -0.2, -0.2, -0.2], [-3.2, -2.9, -2.5, -2.1, -1.8, -1.4, -1.1, -0.7, -0.4, -0.2, -0.2, -0.2, -0.2], [-3.4, -3.1, -2.7, -2.3, -2.0, -1.6, -1.2, -0.9, -0.5, -0.2, -0.2, -0.2, -0.2], [-3.6, -3.2, -2.8, -2.5, -2.1, -1.7, -1.4, -1.0, -0.6, -0.3, -0.2, -0.2, -0.2], [-3.8, -3.4, -3.0, -2.6, -2.3, -1.9, -1.5, -1.1, -0.8, -0.4, -0.2, -0.2, -0.2], [-3.9, -3.5, -3.2, -2.8, -2.4, -2.0, -1.7, -1.3, -0.9, -0.6, -0.2, -0.2, -0.2], [-4.1, -3.7, -3.3, -2.9, -2.6, -2.2, -1.8, -1.4, -1.1, -0.7, -0.3, -0.2, -0.2], [-4.3, -3.9, -3.5, -3.1, -2.7, -2.3, -2.0, -1.6, -1.2, -0.9, -0.5, -0.2, -0.2], [-4.5, -4.1, -3.7, -3.3, -2.9, -2.5, -2.1, -1.8, -1.4, -1.0, -0.7, -0.3, -0.2], [-4.7, -4.3, -3.9, -3.5, -3.1, -2.7, -2.3, -2.0, -1.6, -1.2, -0.9, -0.5, -0.2], [-4.9, -4.5, -4.1, -3.7, -3.3, -2.9, -2.5, -2.1, -1.8, -1.4, -1.0, -0.7, -0.3]];
 const STAB_FLAPS2 = [[-1.9, -1.6, -1.2, -0.9, -0.6, -0.3, -0.2, -0.2, -0.2, -0.2, -0.2, -0.2, -0.2], [-2.4, -2.1, -1.7, -1.3, -0.9, -0.6, -0.3, -0.2, -0.2, -0.2, -0.2, -0.2, -0.2], [-2.9, -2.5, -2.1, -1.7, -1.3, -0.9, -0.6, -0.2, -0.2, -0.2, -0.2, -0.2, -0.2], [-3.4, -3.0, -2.6, -2.1, -1.7, -1.3, -0.9, -0.5, -0.2, -0.2, -0.2, -0.2, -0.2], [-3.9, -3.5, -3.0, -2.6, -2.1, -1.6, -1.2, -0.8, -0.3, -0.2, -0.2, -0.2, -0.2], [-4.4, -3.9, -3.4, -2.9, -2.4, -1.9, -1.5, -1.0, -0.6, -0.2, -0.2, -0.2, -0.2], [-4.7, -4.1, -3.6, -3.1, -2.6, -2.1, -1.6, -1.2, -0.7, -0.3, -0.2, -0.2, -0.2], [-4.9, -4.3, -3.7, -3.2, -2.8, -2.3, -1.8, -1.3, -0.9, -0.4, -0.2, -0.2, -0.2], [-5.1, -4.5, -3.9, -3.4, -2.9, -2.4, -1.9, -1.5, -1.0, -0.6, -0.2, -0.2, -0.2], [-5.3, -4.7, -4.0, -3.5, -3.1, -2.6, -2.1, -1.6, -1.1, -0.7, -0.2, -0.2, -0.2], [-5.5, -4.9, -4.3, -3.8, -3.3, -2.8, -2.3, -1.8, -1.3, -0.8, -0.4, -0.2, -0.2], [-5.7, -5.1, -4.5, -4.0, -3.5, -3.0, -2.5, -2.0, -1.5, -1.0, -0.5, -0.2, -0.2]];
+
+// Official per-aircraft DOW/DOI/%MAC reference data — AHM560 rev.29, 18-Jun-2026.
+// crew key is "flightCrew/cabinCrew". mac values are %MAC for info/cross-check only.
+const DOW_DOI_META = {
+  revision: "29",
+  revisionDate: "18-Jun-2026",
+  mtw: 49650,
+  mtow: 49450,
+  mlw: 41000,
+  mzfw: 40000,
+  standardCrew: {
+    flight: 80,
+    cabin: 75
+  },
+  lastChanges: "BEW/BEI and DOW/DOI were changed for RA-89079 in accordance with the new weighing report."
+};
+const DOW_DOI_DATA = {
+  "RA-89036": {
+    cabinConfig: "103Y",
+    basic: {
+      bew: 27478,
+      bei: 26.34,
+      mac: 13.87
+    },
+    crew: {
+      "2/0": {
+        dow: 27927,
+        doi: 26.58,
+        mac: 14.22
+      },
+      "2/1": {
+        dow: 28002,
+        doi: 25.91,
+        mac: 13.45
+      },
+      "2/2": {
+        dow: 28077,
+        doi: 26.62,
+        mac: 14.29
+      },
+      "2/3": {
+        dow: 28152,
+        doi: 25.95,
+        mac: 13.52
+      },
+      "3/0": {
+        dow: 28007,
+        doi: 25.77,
+        mac: 13.28
+      },
+      "3/1": {
+        dow: 28082,
+        doi: 25.09,
+        mac: 12.51
+      },
+      "3/2": {
+        dow: 28157,
+        doi: 25.80,
+        mac: 13.35
+      },
+      "3/3": {
+        dow: 28232,
+        doi: 25.13,
+        mac: 12.59
+      }
+    }
+  },
+  "RA-89079": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27700,
+      bei: 25.76,
+      mac: 13.22
+    },
+    crew: {
+      "2/0": {
+        dow: 28172,
+        doi: 24.02,
+        mac: 11.29
+      },
+      "2/1": {
+        dow: 28247,
+        doi: 23.35,
+        mac: 10.53
+      },
+      "2/2": {
+        dow: 28322,
+        doi: 24.06,
+        mac: 11.37
+      },
+      "2/3": {
+        dow: 28397,
+        doi: 23.39,
+        mac: 10.61
+      },
+      "3/0": {
+        dow: 28252,
+        doi: 23.20,
+        mac: 10.36
+      },
+      "3/1": {
+        dow: 28327,
+        doi: 22.53,
+        mac: 9.61
+      },
+      "3/2": {
+        dow: 28402,
+        doi: 23.24,
+        mac: 10.45
+      },
+      "3/3": {
+        dow: 28477,
+        doi: 22.57,
+        mac: 9.70
+      }
+    }
+  },
+  "RA-89080": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27690,
+      bei: 24.88,
+      mac: 12.18
+    },
+    crew: {
+      "2/0": {
+        dow: 28162,
+        doi: 23.14,
+        mac: 10.27
+      },
+      "2/1": {
+        dow: 28237,
+        doi: 22.47,
+        mac: 9.51
+      },
+      "2/2": {
+        dow: 28312,
+        doi: 23.18,
+        mac: 10.35
+      },
+      "2/3": {
+        dow: 28387,
+        doi: 22.51,
+        mac: 9.60
+      },
+      "3/0": {
+        dow: 28242,
+        doi: 22.33,
+        mac: 9.35
+      },
+      "3/1": {
+        dow: 28317,
+        doi: 21.65,
+        mac: 8.59
+      },
+      "3/2": {
+        dow: 28392,
+        doi: 22.36,
+        mac: 9.44
+      },
+      "3/3": {
+        dow: 28467,
+        doi: 21.69,
+        mac: 8.69
+      }
+    }
+  },
+  "RA-89085": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27882,
+      bei: 24.95,
+      mac: 12.31
+    },
+    crew: {
+      "2/0": {
+        dow: 28354,
+        doi: 23.21,
+        mac: 10.40
+      },
+      "2/1": {
+        dow: 28429,
+        doi: 22.54,
+        mac: 9.65
+      },
+      "2/2": {
+        dow: 28504,
+        doi: 23.25,
+        mac: 10.49
+      },
+      "2/3": {
+        dow: 28579,
+        doi: 22.58,
+        mac: 9.74
+      },
+      "3/0": {
+        dow: 28434,
+        doi: 22.40,
+        mac: 9.49
+      },
+      "3/1": {
+        dow: 28509,
+        doi: 21.72,
+        mac: 8.74
+      },
+      "3/2": {
+        dow: 28584,
+        doi: 22.43,
+        mac: 9.58
+      },
+      "3/3": {
+        dow: 28659,
+        doi: 21.76,
+        mac: 8.83
+      }
+    }
+  },
+  "RA-89093": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27712,
+      bei: 25.68,
+      mac: 13.13
+    },
+    crew: {
+      "2/0": {
+        dow: 28184,
+        doi: 23.94,
+        mac: 11.20
+      },
+      "2/1": {
+        dow: 28259,
+        doi: 23.27,
+        mac: 10.44
+      },
+      "2/2": {
+        dow: 28334,
+        doi: 23.98,
+        mac: 11.28
+      },
+      "2/3": {
+        dow: 28409,
+        doi: 23.31,
+        mac: 10.53
+      },
+      "3/0": {
+        dow: 28264,
+        doi: 23.12,
+        mac: 10.28
+      },
+      "3/1": {
+        dow: 28339,
+        doi: 22.45,
+        mac: 9.52
+      },
+      "3/2": {
+        dow: 28414,
+        doi: 23.16,
+        mac: 10.36
+      },
+      "3/3": {
+        dow: 28489,
+        doi: 22.49,
+        mac: 9.61
+      }
+    }
+  },
+  "RA-89094": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27577,
+      bei: 25.29,
+      mac: 12.63
+    },
+    crew: {
+      "2/0": {
+        dow: 28049,
+        doi: 23.55,
+        mac: 10.70
+      },
+      "2/1": {
+        dow: 28124,
+        doi: 22.87,
+        mac: 9.94
+      },
+      "2/2": {
+        dow: 28199,
+        doi: 23.58,
+        mac: 10.79
+      },
+      "2/3": {
+        dow: 28274,
+        doi: 22.91,
+        mac: 10.03
+      },
+      "3/0": {
+        dow: 28129,
+        doi: 22.73,
+        mac: 9.78
+      },
+      "3/1": {
+        dow: 28204,
+        doi: 22.05,
+        mac: 9.02
+      },
+      "3/2": {
+        dow: 28279,
+        doi: 22.77,
+        mac: 9.86
+      },
+      "3/3": {
+        dow: 28354,
+        doi: 22.09,
+        mac: 9.11
+      }
+    }
+  },
+  "RA-89095": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27615,
+      bei: 25.65,
+      mac: 13.08
+    },
+    crew: {
+      "2/0": {
+        dow: 28087,
+        doi: 23.91,
+        mac: 11.14
+      },
+      "2/1": {
+        dow: 28162,
+        doi: 23.24,
+        mac: 10.38
+      },
+      "2/2": {
+        dow: 28237,
+        doi: 23.95,
+        mac: 11.22
+      },
+      "2/3": {
+        dow: 28312,
+        doi: 23.28,
+        mac: 10.46
+      },
+      "3/0": {
+        dow: 28167,
+        doi: 23.09,
+        mac: 10.21
+      },
+      "3/1": {
+        dow: 28242,
+        doi: 22.42,
+        mac: 9.46
+      },
+      "3/2": {
+        dow: 28317,
+        doi: 23.13,
+        mac: 10.30
+      },
+      "3/3": {
+        dow: 28392,
+        doi: 22.46,
+        mac: 9.55
+      }
+    }
+  },
+  "RA-89096": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27533,
+      bei: 25.37,
+      mac: 12.73
+    },
+    crew: {
+      "2/0": {
+        dow: 28005,
+        doi: 23.63,
+        mac: 10.79
+      },
+      "2/1": {
+        dow: 28080,
+        doi: 22.96,
+        mac: 10.03
+      },
+      "2/2": {
+        dow: 28155,
+        doi: 23.67,
+        mac: 10.88
+      },
+      "2/3": {
+        dow: 28230,
+        doi: 23.00,
+        mac: 10.12
+      },
+      "3/0": {
+        dow: 28085,
+        doi: 22.81,
+        mac: 9.86
+      },
+      "3/1": {
+        dow: 28160,
+        doi: 22.14,
+        mac: 9.11
+      },
+      "3/2": {
+        dow: 28235,
+        doi: 22.85,
+        mac: 9.95
+      },
+      "3/3": {
+        dow: 28310,
+        doi: 22.18,
+        mac: 9.20
+      }
+    }
+  },
+  "RA-89120": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27651,
+      bei: 25.45,
+      mac: 12.84
+    },
+    crew: {
+      "2/0": {
+        dow: 28123,
+        doi: 23.75,
+        mac: 10.97
+      },
+      "2/1": {
+        dow: 28198,
+        doi: 23.08,
+        mac: 10.21
+      },
+      "2/2": {
+        dow: 28273,
+        doi: 23.79,
+        mac: 11.05
+      },
+      "2/3": {
+        dow: 28348,
+        doi: 23.12,
+        mac: 10.29
+      },
+      "3/0": {
+        dow: 28203,
+        doi: 22.94,
+        mac: 10.04
+      },
+      "3/1": {
+        dow: 28278,
+        doi: 22.26,
+        mac: 9.28
+      },
+      "3/2": {
+        dow: 28353,
+        doi: 22.97,
+        mac: 10.13
+      },
+      "3/3": {
+        dow: 28428,
+        doi: 22.30,
+        mac: 9.38
+      }
+    }
+  },
+  "RA-89121": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27773,
+      bei: 25.12,
+      mac: 12.47
+    },
+    crew: {
+      "2/0": {
+        dow: 28245,
+        doi: 23.42,
+        mac: 10.62
+      },
+      "2/1": {
+        dow: 28320,
+        doi: 22.75,
+        mac: 9.86
+      },
+      "2/2": {
+        dow: 28395,
+        doi: 23.46,
+        mac: 10.70
+      },
+      "2/3": {
+        dow: 28470,
+        doi: 22.79,
+        mac: 9.95
+      },
+      "3/0": {
+        dow: 28325,
+        doi: 22.61,
+        mac: 9.70
+      },
+      "3/1": {
+        dow: 28400,
+        doi: 21.93,
+        mac: 8.94
+      },
+      "3/2": {
+        dow: 28475,
+        doi: 22.64,
+        mac: 9.78
+      },
+      "3/3": {
+        dow: 28550,
+        doi: 21.97,
+        mac: 9.04
+      }
+    }
+  },
+  "RA-89136": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27600,
+      bei: 25.85,
+      mac: 13.30
+    },
+    crew: {
+      "2/0": {
+        dow: 28072,
+        doi: 24.15,
+        mac: 11.42
+      },
+      "2/1": {
+        dow: 28147,
+        doi: 23.48,
+        mac: 10.65
+      },
+      "2/2": {
+        dow: 28222,
+        doi: 24.19,
+        mac: 11.50
+      },
+      "2/3": {
+        dow: 28297,
+        doi: 23.52,
+        mac: 10.74
+      },
+      "3/0": {
+        dow: 28152,
+        doi: 23.34,
+        mac: 10.49
+      },
+      "3/1": {
+        dow: 28227,
+        doi: 22.66,
+        mac: 9.73
+      },
+      "3/2": {
+        dow: 28302,
+        doi: 23.37,
+        mac: 10.57
+      },
+      "3/3": {
+        dow: 28377,
+        doi: 22.70,
+        mac: 9.82
+      }
+    }
+  },
+  "RA-89139": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27533,
+      bei: 25.74,
+      mac: 13.17
+    },
+    crew: {
+      "2/0": {
+        dow: 28025,
+        doi: 23.84,
+        mac: 11.05
+      },
+      "2/1": {
+        dow: 28100,
+        doi: 23.17,
+        mac: 10.28
+      },
+      "2/2": {
+        dow: 28175,
+        doi: 23.88,
+        mac: 11.13
+      },
+      "2/3": {
+        dow: 28250,
+        doi: 23.21,
+        mac: 10.37
+      },
+      "3/0": {
+        dow: 28105,
+        doi: 23.03,
+        mac: 10.12
+      },
+      "3/1": {
+        dow: 28180,
+        doi: 22.35,
+        mac: 9.36
+      },
+      "3/2": {
+        dow: 28255,
+        doi: 23.06,
+        mac: 10.20
+      },
+      "3/3": {
+        dow: 28330,
+        doi: 22.39,
+        mac: 9.45
+      }
+    }
+  },
+  "RA-89149": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27664,
+      bei: 25.94,
+      mac: 13.43
+    },
+    crew: {
+      "2/0": {
+        dow: 28156,
+        doi: 24.05,
+        mac: 11.31
+      },
+      "2/1": {
+        dow: 28231,
+        doi: 23.37,
+        mac: 10.55
+      },
+      "2/2": {
+        dow: 28306,
+        doi: 24.08,
+        mac: 11.39
+      },
+      "2/3": {
+        dow: 28381,
+        doi: 23.41,
+        mac: 10.64
+      },
+      "3/0": {
+        dow: 28236,
+        doi: 23.23,
+        mac: 10.39
+      },
+      "3/1": {
+        dow: 28311,
+        doi: 22.56,
+        mac: 9.63
+      },
+      "3/2": {
+        dow: 28386,
+        doi: 23.27,
+        mac: 10.47
+      },
+      "3/3": {
+        dow: 28461,
+        doi: 22.59,
+        mac: 9.72
+      }
+    }
+  },
+  "RA-89162": {
+    cabinConfig: "98Y",
+    basic: {
+      bew: 27527,
+      bei: 26.46,
+      mac: 14.02
+    },
+    crew: {
+      "2/0": {
+        dow: 28058,
+        doi: 26.74,
+        mac: 14.42
+      },
+      "2/1": {
+        dow: 28133,
+        doi: 26.08,
+        mac: 13.67
+      },
+      "2/2": {
+        dow: 28208,
+        doi: 26.78,
+        mac: 14.49
+      },
+      "3/0": {
+        dow: 28138,
+        doi: 25.92,
+        mac: 13.48
+      },
+      "3/1": {
+        dow: 28213,
+        doi: 25.26,
+        mac: 12.73
+      },
+      "3/2": {
+        dow: 28288,
+        doi: 25.96,
+        mac: 13.55
+      }
+    }
+  },
+  "RA-89179": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27869,
+      bei: 25.38,
+      mac: 12.81
+    },
+    crew: {
+      "2/0": {
+        dow: 28373,
+        doi: 23.61,
+        mac: 10.86
+      },
+      "2/1": {
+        dow: 28448,
+        doi: 22.93,
+        mac: 10.11
+      },
+      "2/2": {
+        dow: 28523,
+        doi: 23.65,
+        mac: 10.94
+      },
+      "2/3": {
+        dow: 28598,
+        doi: 22.97,
+        mac: 10.19
+      },
+      "3/0": {
+        dow: 28453,
+        doi: 22.79,
+        mac: 9.94
+      },
+      "3/1": {
+        dow: 28528,
+        doi: 22.12,
+        mac: 9.20
+      },
+      "3/2": {
+        dow: 28603,
+        doi: 22.83,
+        mac: 10.03
+      },
+      "3/3": {
+        dow: 28678,
+        doi: 22.15,
+        mac: 9.29
+      }
+    }
+  },
+  "RA-89180": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27873,
+      bei: 25.49,
+      mac: 12.93
+    },
+    crew: {
+      "2/0": {
+        dow: 28377,
+        doi: 23.71,
+        mac: 10.99
+      },
+      "2/1": {
+        dow: 28452,
+        doi: 23.04,
+        mac: 10.23
+      },
+      "2/2": {
+        dow: 28527,
+        doi: 23.75,
+        mac: 11.07
+      },
+      "2/3": {
+        dow: 28602,
+        doi: 23.08,
+        mac: 10.32
+      },
+      "3/0": {
+        dow: 28457,
+        doi: 22.90,
+        mac: 10.07
+      },
+      "3/1": {
+        dow: 28532,
+        doi: 22.22,
+        mac: 9.32
+      },
+      "3/2": {
+        dow: 28607,
+        doi: 22.93,
+        mac: 10.15
+      },
+      "3/3": {
+        dow: 28682,
+        doi: 22.26,
+        mac: 9.41
+      }
+    }
+  },
+  "RA-89186": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27788,
+      bei: 26.09,
+      mac: 13.62
+    },
+    crew: {
+      "2/0": {
+        dow: 28291,
+        doi: 24.25,
+        mac: 11.59
+      },
+      "2/1": {
+        dow: 28366,
+        doi: 23.58,
+        mac: 10.83
+      },
+      "2/2": {
+        dow: 28441,
+        doi: 24.29,
+        mac: 11.67
+      },
+      "2/3": {
+        dow: 28516,
+        doi: 23.62,
+        mac: 10.91
+      },
+      "3/0": {
+        dow: 28371,
+        doi: 23.44,
+        mac: 10.66
+      },
+      "3/1": {
+        dow: 28446,
+        doi: 22.76,
+        mac: 9.91
+      },
+      "3/2": {
+        dow: 28521,
+        doi: 23.47,
+        mac: 10.75
+      },
+      "3/3": {
+        dow: 28596,
+        doi: 22.80,
+        mac: 10.00
+      }
+    }
+  },
+  "RA-89189": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27843,
+      bei: 26.31,
+      mac: 13.89
+    },
+    crew: {
+      "2/0": {
+        dow: 28346,
+        doi: 24.47,
+        mac: 11.85
+      },
+      "2/1": {
+        dow: 28421,
+        doi: 23.80,
+        mac: 11.09
+      },
+      "2/2": {
+        dow: 28496,
+        doi: 24.51,
+        mac: 11.93
+      },
+      "2/3": {
+        dow: 28571,
+        doi: 23.84,
+        mac: 11.17
+      },
+      "3/0": {
+        dow: 28426,
+        doi: 23.65,
+        mac: 10.93
+      },
+      "3/1": {
+        dow: 28501,
+        doi: 22.98,
+        mac: 10.18
+      },
+      "3/2": {
+        dow: 28576,
+        doi: 23.69,
+        mac: 11.01
+      },
+      "3/3": {
+        dow: 28651,
+        doi: 23.02,
+        mac: 10.26
+      }
+    }
+  },
+  "RA-89191": {
+    cabinConfig: "100Y",
+    basic: {
+      bew: 27982,
+      bei: 25.72,
+      mac: 13.22
+    },
+    crew: {
+      "2/0": {
+        dow: 28485,
+        doi: 23.88,
+        mac: 11.21
+      },
+      "2/1": {
+        dow: 28560,
+        doi: 23.21,
+        mac: 10.46
+      },
+      "2/2": {
+        dow: 28635,
+        doi: 23.92,
+        mac: 11.29
+      },
+      "2/3": {
+        dow: 28710,
+        doi: 23.25,
+        mac: 10.54
+      },
+      "3/0": {
+        dow: 28565,
+        doi: 23.07,
+        mac: 10.29
+      },
+      "3/1": {
+        dow: 28640,
+        doi: 22.39,
+        mac: 9.55
+      },
+      "3/2": {
+        dow: 28715,
+        doi: 23.10,
+        mac: 10.38
+      },
+      "3/3": {
+        dow: 28790,
+        doi: 22.43,
+        mac: 9.63
+      }
+    }
+  }
+};
 
 // Bilinear interpolation over the Stab Trim Setting table (weight × %MAC -> degrees)
 function interpStab(table, weight, mac) {
@@ -1327,6 +2290,77 @@ function PlanCheckRow({
 }
 function fmtIdx(v) {
   return v === null || v === undefined ? "—" : (v >= 0 ? "+" : "") + v.toFixed(1);
+}
+function DowDoiView({
+  onApply
+}) {
+  const tails = Object.keys(DOW_DOI_DATA);
+  const [tail, setTail] = useState(tails[0]);
+  const data = DOW_DOI_DATA[tail];
+  const crewKeys = Object.keys(data.crew);
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("h2", null, "DOW / DOI — официальные данные по бортам"), /*#__PURE__*/React.createElement("div", {
+    className: "helper"
+  }, "AHM560 rev.", DOW_DOI_META.revision, " от ", DOW_DOI_META.revisionDate, ". MTW ", DOW_DOI_META.mtw, " · MTOW ", DOW_DOI_META.mtow, " · MLW ", DOW_DOI_META.mlw, " · MZFW ", DOW_DOI_META.mzfw, " kg."), /*#__PURE__*/React.createElement("div", {
+    className: "helper",
+    style: {
+      marginTop: 6,
+      padding: 8,
+      background: "var(--surface2)",
+      borderRadius: 7
+    }
+  }, "⚠ ", DOW_DOI_META.lastChanges), /*#__PURE__*/React.createElement("label", {
+    style: {
+      marginTop: 10,
+      display: "block"
+    }
+  }, "Борт (A/C reg.)"), /*#__PURE__*/React.createElement("select", {
+    value: tail,
+    onChange: e => setTail(e.target.value)
+  }, tails.map(t => /*#__PURE__*/React.createElement("option", {
+    key: t,
+    value: t
+  }, t, " (", DOW_DOI_DATA[t].cabinConfig, ")")))), /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "totalrow"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tlabel"
+  }, "Basic data — BEW / BEI / %MAC"), /*#__PURE__*/React.createElement("div", {
+    className: "tval"
+  }, data.basic.bew, /*#__PURE__*/React.createElement("span", {
+    className: "unit"
+  }, "kg"), " \xA0 ", data.basic.bei.toFixed(2), " \xA0 ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "var(--text2)"
+    }
+  }, data.basic.mac.toFixed(2), "%"))), /*#__PURE__*/React.createElement("div", {
+    className: "helper",
+    style: {
+      marginBottom: 8
+    }
+  }, "Выбери строку Crew (flight/cabin) и нажми «Применить» — DOW, DOI и состав экипажа подставятся в калькулятор."), /*#__PURE__*/React.createElement("div", {
+    className: "reftable"
+  }, /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "Crew"), /*#__PURE__*/React.createElement("th", null, "DOW"), /*#__PURE__*/React.createElement("th", null, "DOI"), /*#__PURE__*/React.createElement("th", null, "%MAC"), /*#__PURE__*/React.createElement("th", null))), /*#__PURE__*/React.createElement("tbody", null, crewKeys.map(ck => {
+    const row = data.crew[ck];
+    const isStd = ck === "2/2";
+    return /*#__PURE__*/React.createElement("tr", {
+      key: ck,
+      style: isStd ? {
+        fontWeight: 700
+      } : {}
+    }, /*#__PURE__*/React.createElement("td", null, ck), /*#__PURE__*/React.createElement("td", {
+      className: "mono"
+    }, row.dow), /*#__PURE__*/React.createElement("td", {
+      className: "mono"
+    }, row.doi.toFixed(2)), /*#__PURE__*/React.createElement("td", {
+      className: "mono"
+    }, row.mac.toFixed(2)), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("button", {
+      className: "applybtn",
+      onClick: () => onApply(row.dow, row.doi, ck, tail)
+    }, "Применить")));
+  }))))));
 }
 function TablesView() {
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
@@ -2250,9 +3284,30 @@ function App() {
     className: "tabbtn" + (tab === "calc" ? " active" : ""),
     onClick: () => setTab("calc")
   }, "Калькулятор"), /*#__PURE__*/React.createElement("button", {
+    className: "tabbtn" + (tab === "dowdoi" ? " active" : ""),
+    onClick: () => setTab("dowdoi")
+  }, "DOW/DOI"), /*#__PURE__*/React.createElement("button", {
     className: "tabbtn" + (tab === "tables" ? " active" : ""),
     onClick: () => setTab("tables")
-  }, "Таблицы (сверка)")), tab === "tables" ? /*#__PURE__*/React.createElement(TablesView, null) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Таблицы (сверка)")), tab === "tables" ? /*#__PURE__*/React.createElement(TablesView, null) : tab === "dowdoi" ? /*#__PURE__*/React.createElement(DowDoiView, {
+    onApply: (dowV, doiV, crewStr, tailNum) => {
+      setDow(dowV);
+      setDowText(String(dowV));
+      setDoi(doiV);
+      setDoiText(String(doiV));
+      saveSetting("rrj_dow", dowV);
+      saveSetting("rrj_doi", doiV);
+      if (crewStr) {
+        const [cf, cc] = crewStr.split("/").map(Number);
+        setCrewFlight(cf);
+        setCrewCabin(cc);
+        saveSetting("rrj_crew_flight", cf);
+        saveSetting("rrj_crew_cabin", cc);
+      }
+      if (tailNum) setReg(tailNum);
+      setTab("calc");
+    }
+  }) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
