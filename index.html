@@ -2060,8 +2060,14 @@ function App() {
         child: 0,
         infant: 0
       };
+      // Mass for ZFW/limits purposes correctly uses the selected season's standard weights.
       const w = counts.adult * paxW.adult[season] + counts.child * paxW.child[season] + counts.infant * paxW.infant[season];
-      const idx = w * z.k;
+      // The printed reference table's INDEX column corresponds to SUMMER-standard
+      // weights regardless of season (that's what k was fit from) — using the
+      // winter weight here would overstate the index by ~6-7% whenever winter
+      // is selected, since k*winterWeight ≠ the table's actual index value.
+      const wForIndex = counts.adult * paxW.adult.summer + counts.child * paxW.child.summer + counts.infant * paxW.infant.summer;
+      const idx = wForIndex * z.k;
       // Infants don't occupy a seat — seat count / NO.PAX is adults+children only.
       const totalPax = counts.adult + counts.child;
       return {
