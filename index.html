@@ -2025,6 +2025,7 @@ const PDF_ROWS = {
   aft41: 181.9,
   aft42: 194.5,
   dryOpTotal: 206.1,
+  carryForward: 229.9,
   zone0A: 241.55,
   zone0B: 252.85,
   zone0C: 264.1,
@@ -2828,6 +2829,10 @@ async function buildAndDownloadPdf(data) {
   writeIndex(data.dryOpTotalI, PDF_ROWS.dryOpTotal, {
     bold: true
   });
+
+  // ---- DEAD LOAD: carry-forward of DOW+cargo (the printed "→ −" arrow row) ----
+  writeWeight(data.dryOpTotalW, PDF_ROWS.carryForward);
+  writeIndex(data.dryOpTotalI, PDF_ROWS.carryForward);
 
   // ---- DEAD LOAD: passenger zones ----
   const zoneRowKey = {
