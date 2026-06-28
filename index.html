@@ -172,6 +172,9 @@
     border:1px solid var(--border);font-size:13px;color:var(--text2);
   }
   .macrow b{color:var(--accent);font-size:15px;}
+  .cggraph{width:100%;height:auto;background:var(--surface2);border-radius:8px;margin-top:4px;}
+  .legend-row{display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--text2);}
+  .legend-row .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle;}
   .applybtn{
     background:var(--accent);color:var(--on-accent);border:none;border-radius:6px;
     padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;
@@ -2209,6 +2212,162 @@ async function saveSetting(key, value) {
    ============================================================ */
 const fmt1 = n => (Math.round(n * 10) / 10).toFixed(1);
 const fmtKg = n => Math.round(n).toLocaleString('ru-RU');
+
+// Envelope boundary vertices, read from the printed chart (Index, Weight) pairs.
+// FULL = "Takeoff, Landing and In-flight CG limits" (the larger outer envelope).
+// ZF = "Zero Fuel CG limits" (the smaller inner envelope, only valid up to MZFW).
+const CG_ENVELOPE_FULL = [[24.4, 49450], [39.6, 49450], [46.8, 42500], [43.2, 40000], [39.2, 36000], [34.0, 28600], [29.2, 27300], [27.0, 27300], [26.6, 27400], [24.4, 40000], [22.6, 49000]];
+const CG_ENVELOPE_ZF = [[24.4, 40000], [43.2, 40000], [39.2, 36000], [34.0, 28600], [29.2, 27300], [27.0, 27300], [26.6, 27400]];
+const CG_AXIS = {
+  idxMin: 20,
+  idxMax: 50,
+  wMin: 26000,
+  wMax: 50000
+};
+function CgGraph({
+  points
+}) {
+  // points: [{label, index, weight, color}, ...] — live data points to plot
+  const PAD_L = 42,
+    PAD_R = 14,
+    PAD_T = 10,
+    PAD_B = 22;
+  const VB_W = 520,
+    VB_H = 400;
+  const plotW = VB_W - PAD_L - PAD_R,
+    plotH = VB_H - PAD_T - PAD_B;
+  const mapX = idx => PAD_L + (idx - CG_AXIS.idxMin) / (CG_AXIS.idxMax - CG_AXIS.idxMin) * plotW;
+  const mapY = w => PAD_T + (CG_AXIS.wMax - w) / (CG_AXIS.wMax - CG_AXIS.wMin) * plotH;
+  const pt = ([idx, w]) => `${mapX(idx).toFixed(1)},${mapY(w).toFixed(1)}`;
+
+  // %MAC fan lines, clipped to the axis box
+  const macLines = [];
+  for (let mac = 10; mac <= 36; mac += 2) {
+    const slope = MAC_FIT.P + MAC_FIT.Q * mac;
+    let w1 = CG_AXIS.wMin,
+      w2 = CG_AXIS.wMax;
+    let i1 = MAC_FIT.I0 + slope * w1,
+      i2 = MAC_FIT.I0 + slope * w2;
+    if (i1 < CG_AXIS.idxMin) w1 = (CG_AXIS.idxMin - MAC_FIT.I0) / slope;
+    if (i1 > CG_AXIS.idxMax) w1 = (CG_AXIS.idxMax - MAC_FIT.I0) / slope;
+    if (i2 < CG_AXIS.idxMin) w2 = (CG_AXIS.idxMin - MAC_FIT.I0) / slope;
+    if (i2 > CG_AXIS.idxMax) w2 = (CG_AXIS.idxMax - MAC_FIT.I0) / slope;
+    i1 = MAC_FIT.I0 + slope * w1;
+    i2 = MAC_FIT.I0 + slope * w2;
+    if (w1 < CG_AXIS.wMin || w1 > CG_AXIS.wMax || w2 < CG_AXIS.wMin || w2 > CG_AXIS.wMax) continue;
+    macLines.push({
+      mac,
+      x1: mapX(i1),
+      y1: mapY(w1),
+      x2: mapX(i2),
+      y2: mapY(w2)
+    });
+  }
+  const idxTicks = [];
+  for (let i = 20; i <= 50; i += 2) idxTicks.push(i);
+  const wTicks = [];
+  for (let w = 26000; w <= 50000; w += 4000) wTicks.push(w);
+  return /*#__PURE__*/React.createElement("svg", {
+    viewBox: `0 0 ${VB_W} ${VB_H}`,
+    className: "cggraph",
+    xmlns: "http://www.w3.org/2000/svg"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: PAD_L,
+    y: PAD_T,
+    width: plotW,
+    height: plotH,
+    fill: "none",
+    stroke: "var(--border)"
+  }), macLines.map(l => /*#__PURE__*/React.createElement("g", {
+    key: l.mac
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: l.x1,
+    y1: l.y1,
+    x2: l.x2,
+    y2: l.y2,
+    stroke: "var(--text2)",
+    strokeOpacity: "0.35",
+    strokeWidth: "0.6"
+  }))), /*#__PURE__*/React.createElement("polygon", {
+    points: CG_ENVELOPE_FULL.map(pt).join(" "),
+    fill: "none",
+    stroke: "var(--text2)",
+    strokeWidth: "1.1"
+  }), /*#__PURE__*/React.createElement("polygon", {
+    points: CG_ENVELOPE_ZF.map(pt).join(" "),
+    fill: "none",
+    stroke: "var(--text)",
+    strokeWidth: "1.6"
+  }), idxTicks.map(i => /*#__PURE__*/React.createElement("g", {
+    key: "xi" + i
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: mapX(i),
+    y1: PAD_T + plotH,
+    x2: mapX(i),
+    y2: PAD_T + plotH + 3,
+    stroke: "var(--text2)",
+    strokeWidth: "0.7"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: mapX(i),
+    y: PAD_T + plotH + 14,
+    fontSize: "9",
+    textAnchor: "middle",
+    fill: "var(--text2)"
+  }, i))), wTicks.map(w => /*#__PURE__*/React.createElement("g", {
+    key: "yw" + w
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: PAD_L - 3,
+    y1: mapY(w),
+    x2: PAD_L,
+    y2: mapY(w),
+    stroke: "var(--text2)",
+    strokeWidth: "0.7"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: PAD_L - 6,
+    y: mapY(w) + 3,
+    fontSize: "9",
+    textAnchor: "end",
+    fill: "var(--text2)"
+  }, (w / 1000).toFixed(0), "k"))), points.filter(p => p.weight > 0).map((p, i) => {
+    const x = mapX(p.index),
+      yy = mapY(p.weight);
+    const mac = calcMAC(p.index, p.weight);
+    return /*#__PURE__*/React.createElement("g", {
+      key: i
+    }, /*#__PURE__*/React.createElement("line", {
+      x1: PAD_L,
+      y1: yy,
+      x2: PAD_L + plotW,
+      y2: yy,
+      stroke: p.color,
+      strokeWidth: "0.8",
+      strokeDasharray: "3,2",
+      opacity: "0.7"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: x,
+      y1: PAD_T,
+      x2: x,
+      y2: PAD_T + plotH,
+      stroke: p.color,
+      strokeWidth: "0.8",
+      strokeDasharray: "3,2",
+      opacity: "0.7"
+    }), /*#__PURE__*/React.createElement("circle", {
+      cx: x,
+      cy: yy,
+      r: "4",
+      fill: p.color,
+      stroke: "var(--surface)",
+      strokeWidth: "1"
+    }), /*#__PURE__*/React.createElement("text", {
+      x: x + 7,
+      y: yy - 5,
+      fontSize: "10",
+      fontWeight: "700",
+      fill: p.color
+    }, p.label, " ", mac != null ? mac.toFixed(1) + "%MAC" : ""));
+  }));
+}
 function IndexRuler({
   points
 }) {
@@ -3829,11 +3988,35 @@ function App() {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
-  }, "9"), "Index Scale"), /*#__PURE__*/React.createElement(IndexRuler, {
-    points: rulerPoints
+  }, "9"), "Центровочный график (live)"), /*#__PURE__*/React.createElement(CgGraph, {
+    points: [{
+      label: "TOW",
+      index: toi,
+      weight: tow,
+      color: "#FF9900"
+    }, {
+      label: "LDG",
+      index: li,
+      weight: lw,
+      color: "#D6249F"
+    }]
   }), /*#__PURE__*/React.createElement("div", {
+    className: "legend-row"
+  }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("i", {
+    className: "dot",
+    style: {
+      background: "#FF9900"
+    }
+  }), " Взлёт (TOW/TOI)"), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("i", {
+    className: "dot",
+    style: {
+      background: "#D6249F"
+    }
+  }), " Посадка (LW/LI)")), /*#__PURE__*/React.createElement("div", {
     className: "helper"
-  }, "TOI сверху, LI снизу — положение взлётного и посадочного индекса на шкале (как нижняя линейка бумажного Trim Sheet).")), /*#__PURE__*/React.createElement("div", {
+  }, "Точки двигаются в реальном времени при изменении веса/загрузки — без экспорта PDF. Толстая линия — Zero Fuel CG limits, тонкая — Takeoff/Landing/In-flight CG limits."), /*#__PURE__*/React.createElement(IndexRuler, {
+    points: rulerPoints
+  })), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
