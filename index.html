@@ -3147,13 +3147,15 @@ function App() {
   const dryOpTotalW = dow + cargoTotalW;
   const dryOpTotalI = doi + cargoTotalI;
 
-  // ---- DEAD LOAD TOTAL = passengers only ----
-  const deadLoadW = paxTotalW;
-  const deadLoadI = paxTotalI;
+  // ---- DEAD LOAD TOTAL = carried-forward DRY OPERATING TOTAL + passengers ----
+  // The form prints a "→ −" carry-forward arrow under each TOTAL row: the running
+  // total flows down into the next section rather than being added separately at ZFW.
+  const deadLoadW = dryOpTotalW + paxTotalW;
+  const deadLoadI = dryOpTotalI + paxTotalI;
 
-  // ---- ZERO FUEL ----
-  const zfw = dryOpTotalW + deadLoadW;
-  const zfi = dryOpTotalI + deadLoadI;
+  // ---- ZERO FUEL = the carried cumulative total (no separate addition needed) ----
+  const zfw = deadLoadW;
+  const zfi = deadLoadI;
 
   // ---- RAMP / TAXI ----
   const totalFuelN = Number(totalFuel) || 0;
@@ -3626,7 +3628,7 @@ function App() {
     style: {
       color: "var(--accent)"
     }
-  }, "DEAD LOAD TOTAL (passengers · ", paxTotalCount, " чел.)"), /*#__PURE__*/React.createElement("div", {
+  }, "DEAD LOAD TOTAL (накопительно: DRY OP + пассажиры · ", paxTotalCount, " чел.)"), /*#__PURE__*/React.createElement("div", {
     className: "tval"
   }, fmtKg(deadLoadW), /*#__PURE__*/React.createElement("span", {
     className: "unit"
