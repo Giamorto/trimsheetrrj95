@@ -1053,6 +1053,7 @@ const PDF_COLS = {
   indexPos: 303
 };
 const PDF_ROWS = {
+  dow: 113.35,
   fwd11: 124.95,
   fwd12: 136.5,
   fwd13: 148.1,
@@ -1752,6 +1753,10 @@ async function buildAndDownloadPdf(data) {
     size: 9
   });
 
+  // ---- DRY OPERATING: DOW/DOI baseline (first/free row of the grid) ----
+  writeWeight(data.dow, PDF_ROWS.dow);
+  writeIndex(data.doi, PDF_ROWS.dow);
+
   // ---- DRY OPERATING: compartments ----
   const compRowKey = {
     "11": "fwd11",
@@ -2201,6 +2206,8 @@ function App() {
         date,
         season,
         flapsConfig,
+        dow,
+        doi,
         crew: `${crewFlight}/${crewCabin}`,
         cargoEntries,
         dryOpTotalW,
