@@ -1836,14 +1836,10 @@ async function buildAndDownloadPdf(data) {
   function circleFuelRows(weight) {
     if (weight < PDF_FUEL.weights[0]) return;
     bracketIdx(PDF_FUEL.weights, weight).forEach(i => {
-      const t = PDF_FUEL.topStart + i * PDF_FUEL.rowStep;
-      circle(352, t, {
-        rx: 13,
-        ry: 4
-      });
-      circle(PDF_FUEL.indexX, t, {
-        rx: 9,
-        ry: 4
+      const t = PDF_FUEL.topStart + i * PDF_FUEL.rowStep + 1.5;
+      circle(PDF_FUEL.indexX - 2, t, {
+        rx: 11,
+        ry: 4.5
       });
     });
   }
