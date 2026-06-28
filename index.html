@@ -641,6 +641,25 @@ function fuelIndex(weightKg) {
   }
   return 0;
 }
+
+// Generic exact-table interpolation: pairs = [[weight, index], ...] sorted by weight.
+// Below the first point, interpolates proportionally from the origin (0,0) — physically
+// correct (zero weight -> zero moment contribution) and avoids any k-fit drift.
+function tableIndex(pairs, weightKg) {
+  if (!pairs.length) return 0;
+  if (weightKg <= 0) return 0;
+  if (weightKg <= pairs[0][0]) return weightKg / pairs[0][0] * pairs[0][1];
+  if (weightKg >= pairs[pairs.length - 1][0]) return pairs[pairs.length - 1][1];
+  for (let i = 0; i < pairs.length - 1; i++) {
+    const [w1, i1] = pairs[i],
+      [w2, i2] = pairs[i + 1];
+    if (weightKg >= w1 && weightKg <= w2) {
+      const f = (weightKg - w1) / (w2 - w1);
+      return i1 + f * (i2 - i1);
+    }
+  }
+  return pairs[pairs.length - 1][1];
+}
 const LIMITS = {
   ZFW: 40000,
   RAMP: 49650,
@@ -952,6 +971,14 @@ const RAW_PAX_TABLE = [{
     "0E": 12.5
   }
 }];
+
+// Per-zone [summerWeight, index] pairs for exact table interpolation (replaces the
+// linear k-fit, which had small systematic drift for zones with non-linear
+// table shapes — e.g. 0C is flat at 0.0 for n=1..18 then ticks to +0.1 at n=19,20).
+const PAX_ZONE_TABLES = {};
+for (const zone of Object.keys(PAX_ZONES)) {
+  PAX_ZONE_TABLES[zone] = RAW_PAX_TABLE.filter(row => row.idx[zone] !== null && row.idx[zone] !== undefined).map(row => [row.summer, row.idx[zone]]);
+}
 const STAB_COLS = [12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36];
 const STAB_ROWS = [28000, 30000, 32000, 34000, 36000, 38000, 40000, 42000, 44000, 46000, 48000, 49450];
 const STAB_FLAPS1F = [[-2.5, -2.2, -1.9, -1.5, -1.2, -0.9, -0.6, -0.2, -0.2, -0.2, -0.2, -0.2, -0.2], [-2.9, -2.6, -2.2, -1.9, -1.5, -1.2, -0.9, -0.5, -0.2, -0.2, -0.2, -0.2, -0.2], [-3.2, -2.9, -2.5, -2.1, -1.8, -1.4, -1.1, -0.7, -0.4, -0.2, -0.2, -0.2, -0.2], [-3.4, -3.1, -2.7, -2.3, -2.0, -1.6, -1.2, -0.9, -0.5, -0.2, -0.2, -0.2, -0.2], [-3.6, -3.2, -2.8, -2.5, -2.1, -1.7, -1.4, -1.0, -0.6, -0.3, -0.2, -0.2, -0.2], [-3.8, -3.4, -3.0, -2.6, -2.3, -1.9, -1.5, -1.1, -0.8, -0.4, -0.2, -0.2, -0.2], [-3.9, -3.5, -3.2, -2.8, -2.4, -2.0, -1.7, -1.3, -0.9, -0.6, -0.2, -0.2, -0.2], [-4.1, -3.7, -3.3, -2.9, -2.6, -2.2, -1.8, -1.4, -1.1, -0.7, -0.3, -0.2, -0.2], [-4.3, -3.9, -3.5, -3.1, -2.7, -2.3, -2.0, -1.6, -1.2, -0.9, -0.5, -0.2, -0.2], [-4.5, -4.1, -3.7, -3.3, -2.9, -2.5, -2.1, -1.8, -1.4, -1.0, -0.7, -0.3, -0.2], [-4.7, -4.3, -3.9, -3.5, -3.1, -2.7, -2.3, -2.0, -1.6, -1.2, -0.9, -0.5, -0.2], [-4.9, -4.5, -4.1, -3.7, -3.3, -2.9, -2.5, -2.1, -1.8, -1.4, -1.0, -0.7, -0.3]];
@@ -2040,7 +2067,7 @@ function App() {
   const cargoEntries = useMemo(() => {
     return Object.entries(COMPARTMENTS).map(([code, c]) => {
       const w = Number(cargo[code]) || 0;
-      const idx = w * c.k;
+      const idx = tableIndex(RAW_COMPARTMENT_TABLES[code], w);
       return {
         code,
         ...c,
@@ -2063,11 +2090,9 @@ function App() {
       // Mass for ZFW/limits purposes correctly uses the selected season's standard weights.
       const w = counts.adult * paxW.adult[season] + counts.child * paxW.child[season] + counts.infant * paxW.infant[season];
       // The printed reference table's INDEX column corresponds to SUMMER-standard
-      // weights regardless of season (that's what k was fit from) — using the
-      // winter weight here would overstate the index by ~6-7% whenever winter
-      // is selected, since k*winterWeight ≠ the table's actual index value.
+      // weights regardless of season — winter weight would overstate the index.
       const wForIndex = counts.adult * paxW.adult.summer + counts.child * paxW.child.summer + counts.infant * paxW.infant.summer;
-      const idx = wForIndex * z.k;
+      const idx = tableIndex(PAX_ZONE_TABLES[zone], wForIndex);
       // Infants don't occupy a seat — seat count / NO.PAX is adults+children only.
       const totalPax = counts.adult + counts.child;
       return {
