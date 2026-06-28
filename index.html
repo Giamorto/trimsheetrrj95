@@ -2213,34 +2213,41 @@ async function saveSetting(key, value) {
 const fmt1 = n => (Math.round(n * 10) / 10).toFixed(1);
 const fmtKg = n => Math.round(n).toLocaleString('ru-RU');
 
-// Envelope boundary vertices, read from the printed chart (Index, Weight) pairs.
+// Envelope boundary vertices — measured directly off the printed chart's pixel grid
+// (not eyeballed): pixel→data mapping calibrated against the MTOW/MLW/MZFW reference
+// lines themselves, then each vertex/kink located by detecting the actual line pixels.
 // FULL = "Takeoff, Landing and In-flight CG limits" (the larger outer envelope).
 // ZF = "Zero Fuel CG limits" (the smaller inner envelope, only valid up to MZFW).
-const CG_ENVELOPE_FULL = [[24.4, 49450], [39.6, 49450], [46.8, 42500], [43.2, 40000], [39.2, 36000], [34.0, 28600], [29.2, 27300], [27.0, 27300], [26.6, 27400], [24.4, 40000], [22.6, 49000]];
-const CG_ENVELOPE_ZF = [[24.4, 40000], [43.2, 40000], [39.2, 36000], [34.0, 28600], [29.2, 27300], [27.0, 27300], [26.6, 27400]];
+const CG_ENVELOPE_FULL = [[22.4, 49450], [39.3, 49450], [46.5, 42900], [43.0, 40000], [34.0, 28675], [29.5, 27400], [27.0, 27350], [26.0, 29610], [22.4, 49450]];
+const CG_ENVELOPE_ZF = [[24.0, 40000], [43.0, 40000], [34.0, 28675], [29.5, 27400], [27.0, 27350], [26.0, 29610], [24.0, 40000]];
+// Original chart's plot box is 770.5px wide (Index 20-50) by 481px tall (26000-50000kg) —
+// preserve that exact width:height ratio so the %MAC fan lines have the same visual slope.
 const CG_AXIS = {
   idxMin: 20,
   idxMax: 50,
   wMin: 26000,
-  wMax: 50000
+  wMax: 50000,
+  pxPerIdx: 25.68,
+  pxPerKg: 481 / 24000
 };
 function CgGraph({
   points
 }) {
   // points: [{label, index, weight, color}, ...] — live data points to plot
-  const PAD_L = 42,
-    PAD_R = 14,
-    PAD_T = 10,
+  const PAD_L = 46,
+    PAD_R = 46,
+    PAD_T = 22,
     PAD_B = 22;
-  const VB_W = 520,
-    VB_H = 400;
-  const plotW = VB_W - PAD_L - PAD_R,
-    plotH = VB_H - PAD_T - PAD_B;
+  const plotH = 380;
+  const plotW = plotH * (CG_AXIS.pxPerIdx * (CG_AXIS.idxMax - CG_AXIS.idxMin)) / (CG_AXIS.pxPerKg * (CG_AXIS.wMax - CG_AXIS.wMin));
+  const VB_W = plotW + PAD_L + PAD_R,
+    VB_H = plotH + PAD_T + PAD_B;
   const mapX = idx => PAD_L + (idx - CG_AXIS.idxMin) / (CG_AXIS.idxMax - CG_AXIS.idxMin) * plotW;
   const mapY = w => PAD_T + (CG_AXIS.wMax - w) / (CG_AXIS.wMax - CG_AXIS.wMin) * plotH;
   const pt = ([idx, w]) => `${mapX(idx).toFixed(1)},${mapY(w).toFixed(1)}`;
 
-  // %MAC fan lines, clipped to the axis box
+  // %MAC fan lines, clipped to the axis box — each line exits either through the top
+  // edge (weight=50000) or the right edge (index=50), matching the original's layout.
   const macLines = [];
   for (let mac = 10; mac <= 36; mac += 2) {
     const slope = MAC_FIT.P + MAC_FIT.Q * mac;
@@ -2255,12 +2262,16 @@ function CgGraph({
     i1 = MAC_FIT.I0 + slope * w1;
     i2 = MAC_FIT.I0 + slope * w2;
     if (w1 < CG_AXIS.wMin || w1 > CG_AXIS.wMax || w2 < CG_AXIS.wMin || w2 > CG_AXIS.wMax) continue;
+    // the label sits at whichever end is NOT the bottom (weight=wMin) — i.e. top or right edge
+    const labelAtW2 = w2 > w1;
     macLines.push({
       mac,
       x1: mapX(i1),
       y1: mapY(w1),
       x2: mapX(i2),
-      y2: mapY(w2)
+      y2: mapY(w2),
+      lx: labelAtW2 ? mapX(i2) : mapX(i1),
+      ly: labelAtW2 ? mapY(w2) : mapY(w1)
     });
   }
   const idxTicks = [];
@@ -2297,9 +2308,16 @@ function CgGraph({
     x2: l.x2,
     y2: l.y2,
     stroke: "var(--text2)",
-    strokeOpacity: "0.35",
+    strokeOpacity: "0.4",
     strokeWidth: "0.6"
-  }))), /*#__PURE__*/React.createElement("polygon", {
+  }), /*#__PURE__*/React.createElement("text", {
+    x: l.lx,
+    y: l.ly > PAD_T + 8 ? l.ly - 3 : l.ly + 8,
+    fontSize: "6.5",
+    textAnchor: "middle",
+    fill: "var(--text2)",
+    opacity: "0.8"
+  }, l.mac))), /*#__PURE__*/React.createElement("polygon", {
     points: CG_ENVELOPE_FULL.map(pt).join(" "),
     fill: "none",
     stroke: "var(--text2)",
@@ -2320,10 +2338,10 @@ function CgGraph({
     strokeWidth: "0.7",
     strokeDasharray: "2,2"
   }), /*#__PURE__*/React.createElement("text", {
-    x: PAD_L + plotW - 2,
+    x: PAD_L + plotW / 2,
     y: mapY(w) - 3,
     fontSize: "8",
-    textAnchor: "end",
+    textAnchor: "middle",
     fill: "var(--text2)"
   }, lbl, " ", w, "kg"))), idxTicks.map(i => /*#__PURE__*/React.createElement("g", {
     key: "xi" + i
@@ -2336,11 +2354,36 @@ function CgGraph({
     strokeWidth: "0.7"
   }), /*#__PURE__*/React.createElement("text", {
     x: mapX(i),
-    y: PAD_T + plotH + 14,
-    fontSize: "9",
+    y: PAD_T + plotH + 13,
+    fontSize: "8.5",
     textAnchor: "middle",
     fill: "var(--text2)"
-  }, i))), wTicks.map(w => /*#__PURE__*/React.createElement("g", {
+  }, i), /*#__PURE__*/React.createElement("line", {
+    x1: mapX(i),
+    y1: PAD_T,
+    x2: mapX(i),
+    y2: PAD_T - 3,
+    stroke: "var(--text2)",
+    strokeWidth: "0.7"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: mapX(i),
+    y: PAD_T - 6,
+    fontSize: "8.5",
+    textAnchor: "middle",
+    fill: "var(--text2)"
+  }, i))), /*#__PURE__*/React.createElement("text", {
+    x: PAD_L + plotW / 2,
+    y: VB_H - 2,
+    fontSize: "8.5",
+    textAnchor: "middle",
+    fill: "var(--text2)"
+  }, "Index"), /*#__PURE__*/React.createElement("text", {
+    x: PAD_L + plotW / 2,
+    y: 9,
+    fontSize: "8.5",
+    textAnchor: "middle",
+    fill: "var(--text2)"
+  }, "Index"), wTicks.map(w => /*#__PURE__*/React.createElement("g", {
     key: "yw" + w
   }, /*#__PURE__*/React.createElement("line", {
     x1: PAD_L - 3,
@@ -2350,10 +2393,23 @@ function CgGraph({
     stroke: "var(--text2)",
     strokeWidth: "0.7"
   }), /*#__PURE__*/React.createElement("text", {
-    x: PAD_L - 6,
+    x: PAD_L - 5,
     y: mapY(w) + 3,
-    fontSize: "9",
+    fontSize: "8.5",
     textAnchor: "end",
+    fill: "var(--text2)"
+  }, (w / 1000).toFixed(0), "k"), /*#__PURE__*/React.createElement("line", {
+    x1: PAD_L + plotW,
+    y1: mapY(w),
+    x2: PAD_L + plotW + 3,
+    y2: mapY(w),
+    stroke: "var(--text2)",
+    strokeWidth: "0.7"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: PAD_L + plotW + 5,
+    y: mapY(w) + 3,
+    fontSize: "8.5",
+    textAnchor: "start",
     fill: "var(--text2)"
   }, (w / 1000).toFixed(0), "k"))), points.filter(p => p.weight > 0).map((p, i) => {
     const x = mapX(p.index),
