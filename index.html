@@ -650,6 +650,22 @@ function fuelIndex(weightKg) {
   return 0;
 }
 
+// Traces how CG (index, weight) actually moves in flight as fuel burns down from
+// `fuelStart` (fuel onboard at brake release, i.e. TOW's fuel) to `fuelEnd` (default 0,
+// dry tanks) — NOT a straight line between TOW and LDG, but the true piecewise-linear
+// path through every real FUEL_TABLE breakpoint in that range, since fuel index vs fuel
+// weight has kinks at each breakpoint.
+function fuelBurnTrail(zfw, zfi, fuelStart, fuelEnd = 0) {
+  if (fuelStart <= fuelEnd) return [];
+  const breakpoints = FUEL_TABLE.map(r => r[0]).filter(w => w > fuelEnd && w < fuelStart);
+  const levels = [fuelStart, ...breakpoints, fuelEnd].sort((a, b) => b - a);
+  return levels.map(f => ({
+    index: zfi + fuelIndex(f),
+    weight: zfw + f,
+    fuel: f
+  }));
+}
+
 // Generic exact-table interpolation: pairs = [[weight, index], ...] sorted by weight.
 // Below the first point, interpolates proportionally from the origin (0,0) — physically
 // correct (zero weight -> zero moment contribution) and avoids any k-fit drift.
@@ -2231,7 +2247,8 @@ const CG_AXIS = {
   pxPerKg: 481 / 24000
 };
 function CgGraph({
-  points
+  points,
+  trail = []
 }) {
   // points: [{label, index, weight, color}, ...] — live data points to plot
   const PAD_L = 46,
@@ -2411,7 +2428,32 @@ function CgGraph({
     fontSize: "8.5",
     textAnchor: "start",
     fill: "var(--text2)"
-  }, (w / 1000).toFixed(0), "k"))), points.filter(p => p.weight > 0).map((p, i) => {
+  }, (w / 1000).toFixed(0), "k"))), trail.length > 1 && /*#__PURE__*/React.createElement("g", null, /*#__PURE__*/React.createElement("polyline", {
+    points: trail.map(p => `${mapX(p.index).toFixed(1)},${mapY(p.weight).toFixed(1)}`).join(" "),
+    fill: "none",
+    stroke: "#9C6ADE",
+    strokeWidth: "1.6",
+    strokeDasharray: "4,2.5",
+    opacity: "0.85"
+  }), (() => {
+    const last = trail[trail.length - 1];
+    const prev = trail[trail.length - 2];
+    const x2 = mapX(last.index),
+      y2 = mapY(last.weight),
+      x1 = mapX(prev.index),
+      y1 = mapY(prev.weight);
+    const ang = Math.atan2(y2 - y1, x2 - x1);
+    const ah = 5;
+    const lx = x2 - ah * Math.cos(ang - Math.PI / 7),
+      ly = y2 - ah * Math.sin(ang - Math.PI / 7);
+    const rx = x2 - ah * Math.cos(ang + Math.PI / 7),
+      ry = y2 - ah * Math.sin(ang + Math.PI / 7);
+    return /*#__PURE__*/React.createElement("polygon", {
+      points: `${x2},${y2} ${lx},${ly} ${rx},${ry}`,
+      fill: "#9C6ADE",
+      opacity: "0.85"
+    });
+  })()), points.filter(p => p.weight > 0).map((p, i) => {
     const x = mapX(p.index),
       yy = mapY(p.weight);
     return /*#__PURE__*/React.createElement("g", {
@@ -2745,26 +2787,34 @@ async function buildAndDownloadPdf(data) {
       borderWidth: 1.1
     });
   }
-  function graphArrow(p1, p2, color) {
+  function graphTrail(zfw, zfi, fuelStart, color) {
+    const pts = fuelBurnTrail(zfw, zfi, fuelStart, 0);
+    if (pts.length < 2) return;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = graphXY(pts[i].index, pts[i].weight),
+        b = graphXY(pts[i + 1].index, pts[i + 1].weight);
+      page.drawLine({
+        start: {
+          x: a.x,
+          y: y(a.top)
+        },
+        end: {
+          x: b.x,
+          y: y(b.top)
+        },
+        thickness: 1.3,
+        color,
+        dashArray: [3, 2]
+      });
+    }
+    const p1 = pts[pts.length - 2],
+      p2 = pts[pts.length - 1];
     const a = graphXY(p1.index, p1.weight),
       b = graphXY(p2.index, p2.weight);
     const x1 = a.x,
       y1 = y(a.top),
       x2 = b.x,
       y2 = y(b.top);
-    page.drawLine({
-      start: {
-        x: x1,
-        y: y1
-      },
-      end: {
-        x: x2,
-        y: y2
-      },
-      thickness: 1.3,
-      color,
-      dashArray: [3, 2]
-    });
     const ang = Math.atan2(y2 - y1, x2 - x1);
     const hl = 7,
       hw = 0.5;
@@ -3117,7 +3167,7 @@ async function buildAndDownloadPdf(data) {
   });
   if (data.totalFuelN > 0) {
     writeWeight(data.totalFuelN, PDF_ROWS.totalFuel);
-    writeIndex(data.fuelIdxTotal, PDF_ROWS.totalFuel);
+    writeIndex(displayDelta(data.rampI, data.zfi), PDF_ROWS.totalFuel);
     circleFuelRows(data.totalFuelN);
   }
   writeWeight(data.rampW, PDF_ROWS.rampTaxi, {
@@ -3128,7 +3178,7 @@ async function buildAndDownloadPdf(data) {
   });
   if (data.taxiFuelN > 0) {
     writeWeight(data.taxiFuelN, PDF_ROWS.taxiFuel);
-    writeIndex(data.taxiFuelIdx, PDF_ROWS.taxiFuel);
+    writeIndex(displayDelta(data.rampI, data.toi), PDF_ROWS.taxiFuel);
     circleFuelRows(data.taxiFuelN);
   }
   writeWeight(data.tow, PDF_ROWS.takeoff, {
@@ -3173,13 +3223,7 @@ async function buildAndDownloadPdf(data) {
   graphMacLine(data.li, data.lw, magenta, -11); // LDG label sits lower — avoids overlap
   graphCrosshair(data.toi, data.tow, amber);
   graphCrosshair(data.li, data.lw, magenta);
-  graphArrow({
-    index: data.toi,
-    weight: data.tow
-  }, {
-    index: data.li,
-    weight: data.lw
-  }, rgb(0.5, 0.5, 0.5));
+  graphTrail(data.zfw, data.zfi, data.totalFuelN - data.taxiFuelN, rgb(0.5, 0.5, 0.5));
   graphDot(data.toi, data.tow, amber);
   graphDot(data.li, data.lw, magenta);
   {
@@ -3899,11 +3943,11 @@ function App() {
     className: "idxrow"
   }, /*#__PURE__*/React.createElement("span", null, "Fuel Index (Total Fuel, ", fmtKg(totalFuelN), " kg)"), /*#__PURE__*/React.createElement("span", {
     className: "mono"
-  }, fmtIdx(fuelIdxTotal))), /*#__PURE__*/React.createElement("div", {
+  }, fmtIdx(displayDelta(rampI, zfi)))), /*#__PURE__*/React.createElement("div", {
     className: "idxrow"
   }, /*#__PURE__*/React.createElement("span", null, "Taxi Fuel Index (", fmtKg(taxiFuelN), " kg)"), /*#__PURE__*/React.createElement("span", {
     className: "mono"
-  }, fmtIdx(taxiFuelIdx))), /*#__PURE__*/React.createElement("div", {
+  }, fmtIdx(displayDelta(rampI, toi)))), /*#__PURE__*/React.createElement("div", {
     className: "totalrow",
     style: {
       borderTop: "none"
@@ -4016,7 +4060,8 @@ function App() {
       index: li,
       weight: lw,
       color: "#D6249F"
-    }]
+    }],
+    trail: fuelBurnTrail(zfw, zfi, totalFuelN - taxiFuelN, 0)
   }), /*#__PURE__*/React.createElement("div", {
     className: "legend-row"
   }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("i", {
@@ -4029,7 +4074,12 @@ function App() {
     style: {
       background: "#D6249F"
     }
-  }), " Посадка: ", fmtKg(lw), " kg, ", li >= 0 ? "+" : "", fmt1(li), ", ", /*#__PURE__*/React.createElement("b", null, calcMAC(li, lw)?.toFixed(1), "%MAC"))), /*#__PURE__*/React.createElement("div", {
+  }), " Посадка: ", fmtKg(lw), " kg, ", li >= 0 ? "+" : "", fmt1(li), ", ", /*#__PURE__*/React.createElement("b", null, calcMAC(li, lw)?.toFixed(1), "%MAC")), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("i", {
+    className: "dot",
+    style: {
+      background: "#9C6ADE"
+    }
+  }), " Линия расхода топлива: TOW → 0 кг остатка (полная теоретическая траектория center of gravity в полёте)")), /*#__PURE__*/React.createElement("div", {
     className: "helper"
   }, "Точки двигаются в реальном времени при изменении веса/загрузки — без экспорта PDF. Толстая линия — Zero Fuel CG limits, тонкая — Takeoff/Landing/In-flight CG limits.")), /*#__PURE__*/React.createElement("div", {
     className: "card"
