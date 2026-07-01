@@ -3479,6 +3479,36 @@ function App() {
     ...c,
     [code]: val
   }));
+
+  // Quick actions: auto-distribute `planCargo` (entered in step 3) across the
+  // compartments by a front/aft weight split. Within each group, compartments
+  // are filled in order up to their own max before spilling into the next one,
+  // so the distributed total never exceeds that group's combined capacity —
+  // any leftover past full capacity is simply not distributed.
+  // Loading always starts nearest the centre wing box: CPT 13/31 are closest
+  // to it in each hold, so they fill first, then 12/32, then 11/41, 42 last.
+  const CARGO_FWD_CODES = ["13", "12", "11"];
+  const CARGO_AFT_CODES = Object.keys(COMPARTMENTS).filter(c => COMPARTMENTS[c].group === "AFT");
+  const distributeCargo = aftShare => {
+    const total = Math.max(0, Number(planCargo) || 0);
+    const aftTarget = Math.round(total * aftShare * 100) / 100;
+    const fwdTarget = Math.round((total - aftTarget) * 100) / 100;
+    const fillGroup = (codes, target) => {
+      let remaining = target;
+      const result = {};
+      codes.forEach(code => {
+        const amount = Math.max(0, Math.min(COMPARTMENTS[code].max, remaining));
+        result[code] = Math.round(amount * 100) / 100;
+        remaining = Math.round((remaining - amount) * 100) / 100;
+      });
+      return result;
+    };
+    setCargo(c => ({
+      ...c,
+      ...fillGroup(CARGO_FWD_CODES, fwdTarget),
+      ...fillGroup(CARGO_AFT_CODES, aftTarget)
+    }));
+  };
   const setZoneVal = (zone, field, val) => {
     setZonePax(zp => {
       const cur = zp[zone];
@@ -3840,6 +3870,17 @@ function App() {
     actual: totalInfant,
     unit: "чел."
   })), /*#__PURE__*/React.createElement("div", {
+    className: "quickrow"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "quickbtn",
+    onClick: () => distributeCargo(0.6)
+  }, "⚖ 60/40 (", fmtKg(planCargo || 0), " kg)"), /*#__PURE__*/React.createElement("button", {
+    className: "quickbtn",
+    onClick: () => distributeCargo(1)
+  }, "Весь груз → AFT"), /*#__PURE__*/React.createElement("button", {
+    className: "quickbtn",
+    onClick: () => distributeCargo(0)
+  }, "Весь груз → FWD")), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
@@ -3978,7 +4019,7 @@ function App() {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
-  }, "7"), "Fuel & Takeoff"), /*#__PURE__*/React.createElement("div", {
+  }, "7"), "Fuel, Takeoff & Landing"), /*#__PURE__*/React.createElement("div", {
     className: "row"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", null, "Total Fuel, kg"), /*#__PURE__*/React.createElement("input", {
     type: "number",
@@ -3997,6 +4038,27 @@ function App() {
     placeholder: "0",
     onChange: e => setTaxiFuel(e.target.value)
   }))), /*#__PURE__*/React.createElement("div", {
+    className: "row"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", null, "Est Fuel Used (trip), kg"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: "0",
+    value: tripFuel || "",
+    placeholder: "0",
+    onChange: e => setTripFuel(e.target.value)
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", null, "Landing Fuel, kg ", /*#__PURE__*/React.createElement("span", {
+    className: "autobadge"
+  }, "авто")), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: fmtKg(landingFuelW),
+    readOnly: true,
+    className: "autofield"
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "helper"
+  }, "Landing Fuel = Total Fuel − Taxi Fuel − Trip Fuel"), taxiFuelN + tripFuelN > totalFuelN && totalFuelN > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "limitline limitline-bad"
+  }, "⚠ Taxi+Trip Fuel (", fmtKg(taxiFuelN + tripFuelN), " kg) больше Total Fuel (", fmtKg(totalFuelN), " kg) — проверь цифры"), landingFuelW < 800 && totalFuelN > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "limitline limitline-bad"
+  }, "⚠ Landing Fuel ", fmtKg(landingFuelW), " kg — меньше 800 кг, проверь остаток/резерв"), /*#__PURE__*/React.createElement("div", {
     className: "idxrow"
   }, /*#__PURE__*/React.createElement("span", null, "Fuel Index (Total Fuel, ", fmtKg(totalFuelN), " kg)"), /*#__PURE__*/React.createElement("span", {
     className: "mono"
@@ -4050,32 +4112,7 @@ function App() {
     className: "mono"
   }, interpStab(STAB_FLAPS2, STAB_ROWS, tow, calcMAC(toi, tow)).toFixed(1), "°"), /*#__PURE__*/React.createElement("br", null), "STAB TO (FLAP 3): ", /*#__PURE__*/React.createElement("b", {
     className: "mono"
-  }, interpStab(STAB_FLAPS3, STAB_ROWS_3, tow, calcMAC(toi, tow)).toFixed(1), "°"))), /*#__PURE__*/React.createElement("div", {
-    className: "card"
-  }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
-    className: "step"
-  }, "8"), "Landing"), /*#__PURE__*/React.createElement("div", {
-    className: "row"
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", null, "Est Fuel Used (trip), kg"), /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    min: "0",
-    value: tripFuel || "",
-    placeholder: "0",
-    onChange: e => setTripFuel(e.target.value)
-  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", null, "Landing Fuel, kg ", /*#__PURE__*/React.createElement("span", {
-    className: "autobadge"
-  }, "авто")), /*#__PURE__*/React.createElement("input", {
-    type: "text",
-    value: fmtKg(landingFuelW),
-    readOnly: true,
-    className: "autofield"
-  }))), /*#__PURE__*/React.createElement("div", {
-    className: "helper"
-  }, "Landing Fuel = Total Fuel − Taxi Fuel − Trip Fuel (топливо на взлёте минус трип фьюел)."), taxiFuelN + tripFuelN > totalFuelN && totalFuelN > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "limitline limitline-bad"
-  }, "⚠ Taxi+Trip Fuel (", fmtKg(taxiFuelN + tripFuelN), " kg) больше Total Fuel (", fmtKg(totalFuelN), " kg) — проверь цифры"), landingFuelW < 800 && totalFuelN > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "limitline limitline-bad"
-  }, "⚠ Landing Fuel ", fmtKg(landingFuelW), " kg — меньше 800 кг, проверь остаток/резерв"), /*#__PURE__*/React.createElement("div", {
+  }, interpStab(STAB_FLAPS3, STAB_ROWS_3, tow, calcMAC(toi, tow)).toFixed(1), "°")), /*#__PURE__*/React.createElement("div", {
     className: "idxrow"
   }, /*#__PURE__*/React.createElement("span", null, "Landing Fuel Index (", fmtKg(landingFuelW), " kg)"), /*#__PURE__*/React.createElement("span", {
     className: "mono"
@@ -4109,7 +4146,7 @@ function App() {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
-  }, "9"), "Центровочный график (live)"), /*#__PURE__*/React.createElement(CgGraph, {
+  }, "8"), "Центровочный график"), /*#__PURE__*/React.createElement(CgGraph, {
     points: [{
       label: "TOW",
       index: toi,
@@ -4141,17 +4178,15 @@ function App() {
     }
   }), " Линия расхода топлива: TOW → 0 кг остатка (полная теоретическая траектория center of gravity в полёте)")), /*#__PURE__*/React.createElement("div", {
     className: "helper"
-  }, "Точки двигаются в реальном времени при изменении веса/загрузки — без экспорта PDF. Толстая линия — Zero Fuel CG limits, тонкая — Takeoff/Landing/In-flight CG limits.")), /*#__PURE__*/React.createElement("div", {
+  }, "Толстая линия — Zero Fuel CG limits, тонкая — Takeoff/Landing/In-flight CG limits.")), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
-  }, "10"), "Экспорт"), /*#__PURE__*/React.createElement("button", {
+  }, "9"), "Экспорт"), /*#__PURE__*/React.createElement("button", {
     className: "exportbtn",
     disabled: exporting,
     onClick: handleExportPdf
-  }, exporting ? "Формирую PDF…" : "📄 Открыть PDF (бланк Trim Sheet)"), /*#__PURE__*/React.createElement("div", {
-    className: "helper"
-  }, "Заполняет официальный бланк Azimuth значениями из расчёта и открывает в новой вкладке. Кружком отмечаются строки справочных таблиц, которые были использованы."), exportError && /*#__PURE__*/React.createElement("div", {
+  }, exporting ? "Формирую PDF…" : "📄 Открыть PDF (бланк Trim Sheet)"), exportError && /*#__PURE__*/React.createElement("div", {
     className: "limitline limitline-bad",
     style: {
       marginTop: 8
@@ -4169,8 +4204,6 @@ function App() {
     target: "_blank",
     rel: "noopener noreferrer"
   }, "📄 Открыть PDF"))), /*#__PURE__*/React.createElement("div", {
-    className: "footer-note"
-  }, "Расчёт индексов по официальным таблицам, живой центровочный график, расчёт STAB TO (FLAP 1+F/2/3) и экспорт в заполненный бланк Trim Sheet."), /*#__PURE__*/React.createElement("div", {
     className: "disclaimer"
   }, "⚠ Данное приложение является неофициальным учебно-вспомогательным инструментом и не имеет авиационной сертификации. Оно не заменяет и не отменяет обязательного использования официально утверждённой документации, сертифицированного программного обеспечения и установленных процедур эксплуатанта. Автор не несёт никакой ответственности за любые последствия прямого или косвенного использования данного приложения при планировании или выполнении полётов.")));
 }
