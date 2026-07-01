@@ -212,6 +212,13 @@
 
   .helper{font-size:11px;color:var(--text2);line-height:1.5;margin-top:4px;}
   .pillrow{display:flex;gap:6px;margin-bottom:10px;}
+  .quickrow{display:flex;gap:8px;margin-bottom:14px;margin-top:-4px;}
+  .quickbtn{
+    flex:1;background:var(--surface);border:1.5px solid var(--accent);color:var(--accent);
+    border-radius:9px;padding:9px 10px;font-size:12.5px;font-weight:700;cursor:pointer;
+  }
+  .quickbtn:active{transform:scale(0.97);}
+  .quickbtn-clear{flex:0 0 auto;width:42px;border-color:var(--border);color:var(--text2);}
   .pill{
     flex:1;text-align:center;padding:9px;border-radius:9px;border:1px solid var(--border);
     background:var(--surface2);cursor:pointer;font-size:12px;font-weight:600;color:var(--text2);
@@ -561,106 +568,77 @@ const {
 } = React;
 
 /* ============================================================
-   AIRCRAFT DATA — derived from RRJ-95 (RA-89180/89186/89189/89191) trim sheet
-   Arm constants computed via least-squares (index = weight_kg * k) from
-   the printed compartment / pax-zone tables, validated against table maxima.
+   AIRCRAFT DATA — derived from RRJ-95 (RA-89180/89186/89189/89191) trim sheet.
+   Indices are looked up by exact table interpolation (see tableIndex / 
+   RAW_COMPARTMENT_TABLES / PAX_ZONE_TABLES below), not a linear fit.
    ============================================================ */
 
 const COMPARTMENTS = {
   "11": {
     label: "FWD CPT 11",
     group: "FWD",
-    max: 590,
-    k: -0.007644
+    max: 590
   },
   "12": {
     label: "FWD CPT 12",
     group: "FWD",
-    max: 580,
-    k: -0.005812
+    max: 580
   },
   "13": {
     label: "FWD CPT 13",
     group: "FWD",
-    max: 775,
-    k: -0.004000
+    max: 775
   },
   "31": {
     label: "AFT CPT 31",
     group: "AFT",
-    max: 580,
-    k: 0.003240
+    max: 580
   },
   "32": {
     label: "AFT CPT 32",
     group: "AFT",
-    max: 775,
-    k: 0.004971
+    max: 775
   },
   "41": {
     label: "AFT CPT 41",
     group: "AFT",
-    max: 440,
-    k: 0.006746
+    max: 440
   },
   "42": {
     label: "AFT CPT 42",
     group: "AFT",
-    max: 460,
-    k: 0.008186
+    max: 460
   }
 };
 const PAX_ZONES = {
   "0A": {
-    k: -0.005966,
     maxPax: 15
   },
   "0B": {
-    k: -0.003112,
     maxPax: 20
   },
   "0C": {
-    k: 0.000068,
     maxPax: 20
   },
   "0D": {
-    k: 0.003182,
     maxPax: 20
   },
   "0E": {
-    k: 0.006667,
     maxPax: 25
   }
 };
 
-// FUEL: weight(kg) -> index. Non-linear / non-monotonic (tank sequencing), piecewise-interpolated.
-const FUEL_TABLE = [[0, 0.0], [1500, 0.0], [2000, 0.1], [2500, 0.2], [3000, 0.6], [3500, 1.2], [4000, 1.8], [4500, 2.7], [5000, 3.8], [5500, 3.5], [6000, 3.1], [6500, 2.6], [7000, 2.1], [7500, 1.6], [8000, 1.1], [8500, 0.7], [9000, 0.2], [9500, -0.4], [10000, -1.1], [10500, -1.7], [11000, -2.4], [11500, -3.0], [12000, -3.7], [12500, -4.3], [12644, -4.5]];
-function fuelIndex(weightKg) {
-  const t = FUEL_TABLE;
-  if (weightKg <= t[0][0]) return t[0][1];
-  if (weightKg >= t[t.length - 1][0]) return t[t.length - 1][1];
-  for (let i = 0; i < t.length - 1; i++) {
-    const [w1, i1] = t[i],
-      [w2, i2] = t[i + 1];
-    if (weightKg >= w1 && weightKg <= w2) {
-      const f = (weightKg - w1) / (w2 - w1);
-      return i1 + f * (i2 - i1);
-    }
-  }
-  return 0;
-}
-
 // Traces how CG (index, weight) actually moves in flight as fuel burns down from
 // `fuelStart` (fuel onboard at brake release, i.e. TOW's fuel) to `fuelEnd` (default 0,
 // dry tanks) — NOT a straight line between TOW and LDG, but the true piecewise-linear
-// path through every real FUEL_TABLE breakpoint in that range, since fuel index vs fuel
+// path through every real fuel-table breakpoint in that range, since fuel index vs fuel
 // weight has kinks at each breakpoint.
 function fuelBurnTrail(zfw, zfi, fuelStart, fuelEnd = 0) {
   if (fuelStart <= fuelEnd) return [];
-  const breakpoints = FUEL_TABLE.map(r => r[0]).filter(w => w > fuelEnd && w < fuelStart);
+  const breakpoints = RAW_FUEL_TABLE.map(r => r[0]).filter(w => w > fuelEnd && w < fuelStart);
   const levels = [fuelStart, ...breakpoints, fuelEnd].sort((a, b) => b - a);
   return levels.map(f => ({
-    index: zfi + fuelIndex(f),
+    index: zfi + tableIndex(RAW_FUEL_TABLE, f),
     weight: zfw + f,
     fuel: f
   }));
@@ -684,12 +662,26 @@ function tableIndex(pairs, weightKg) {
   }
   return pairs[pairs.length - 1][1];
 }
+
+// Splits |v| into (integer part, tenths digit) from a SINGLE rounded value,
+// so the two digits can never disagree (the old bug: flooring the integer
+// part and rounding the tenths digit independently could give e.g. "1.8"
+// for a value that should round to "2.0"). Used by both writeIndex and
+// writeSignedIndex in the PDF export.
+function splitTenths(v) {
+  const totalTenths = Math.round(Math.abs(v) * 10);
+  return {
+    intPart: Math.floor(totalTenths / 10),
+    tenths: totalTenths % 10
+  };
+}
 const LIMITS = {
   ZFW: 40000,
   RAMP: 49650,
   TOW: 49450,
   LW: 41000
 };
+const TOTAL_SEAT_CAPACITY = Object.values(PAX_ZONES).reduce((s, z) => s + z.maxPax, 0);
 const DEFAULT_PAX_WEIGHTS = {
   adult: {
     summer: 75,
@@ -2030,14 +2022,6 @@ const PDF_HEADER = {
     top: 76
   }
 };
-
-// Main left grid column right-edges (text is right-aligned up to these x values)
-const PDF_COLS = {
-  noPax: 144,
-  weight: 206,
-  indexNeg: 257,
-  indexPos: 303
-};
 const PDF_ROWS = {
   dow: 113.35,
   fwd11: 124.95,
@@ -2486,6 +2470,14 @@ function CgGraph({
     }));
   }));
 }
+function WeightIndex({
+  w,
+  i
+}) {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, fmtKg(w), /*#__PURE__*/React.createElement("span", {
+    className: "unit"
+  }, "kg"), " \xA0 ", fmtIdx(i));
+}
 function LimitLine({
   label,
   value,
@@ -2532,6 +2524,31 @@ function fmtIdx(v) {
 // where independently-rounded raw numbers don't visually add up.
 function displayDelta(total, base) {
   return (Math.round(total * 10) - Math.round(base * 10)) / 10;
+}
+
+// Builds {value, onChange, onBlur} for a numeric input that needs a raw-text
+// buffer (so e.g. typing "23." doesn't get silently mangled mid-keystroke).
+// On every keystroke: buffer updates immediately, parsed value updates only
+// if it's currently a valid number. On blur: clamps and normalizes both.
+function textBufferField(text, setText, setValue, settingKey, clamp) {
+  return {
+    value: text,
+    onChange: e => {
+      const t = e.target.value;
+      setText(t);
+      const v = Number(t);
+      if (!isNaN(v)) {
+        setValue(v);
+        saveSetting(settingKey, v);
+      }
+    },
+    onBlur: () => {
+      const clamped = clamp(Number(text) || 0);
+      setValue(clamped);
+      setText(String(clamped));
+      saveSetting(settingKey, clamped);
+    }
+  };
 }
 function DowDoiView({
   onApply
@@ -2612,7 +2629,7 @@ function TablesView() {
     style: {
       marginBottom: 8
     }
-  }, "Точные значения из бумажного Trim Sheet. В калькуляторе используется линейная аппроксимация (метод наименьших квадратов) этих же точек — расхождение не больше округления."), /*#__PURE__*/React.createElement("div", {
+  }, "Точные значения из бумажного Trim Sheet. Калькулятор использует точную интерполяцию по этим же точкам (без аппроксимации)."), /*#__PURE__*/React.createElement("div", {
     className: "tablegrid"
   }, Object.entries(RAW_COMPARTMENT_TABLES).map(([code, rows]) => /*#__PURE__*/React.createElement("div", {
     className: "reftable",
@@ -2677,7 +2694,7 @@ function TablesView() {
     style: {
       marginBottom: 8
     }
-  }, "Справочно. Пока не участвует в расчёте калькулятора — будет добавлено на следующем этапе."), /*#__PURE__*/React.createElement("div", {
+  }, "Справочно. Используется для расчёта STAB TO в калькуляторе (шаг 7)."), /*#__PURE__*/React.createElement("div", {
     className: "scrollx"
   }, /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "TOW \\ %MAC"), STAB_COLS.map(c => /*#__PURE__*/React.createElement("th", {
     key: c
@@ -2960,17 +2977,39 @@ async function buildAndDownloadPdf(data) {
     drawInCells(paxCountChars(n), PDF_CELLS.noPax, top, opts);
   }
 
+  // Masks the template's faint pre-printed "." in the tenths cell, then draws our
+  // own ".N" tight against it — shared by writeIndex and writeSignedIndex below.
+  function drawMaskedDot(cells, top, size, f, color, tenths, baseY) {
+    page.drawRectangle({
+      x: cells[2] + 0.8,
+      y: y(top) - size * 0.62,
+      width: cells[3] - cells[2] - 1.6,
+      height: size * 0.85,
+      color: white
+    });
+    const dotStr = "." + tenths;
+    const dw = f.widthOfTextAtSize(dotStr, size);
+    const dotSpan = cells[3] - cells[2];
+    const dotX = cells[2] + (dotSpan - dw) / 2 - 1; // nudge slightly left, tight against units digit
+    page.drawText(dotStr, {
+      x: dotX,
+      y: baseY,
+      size,
+      font: f,
+      color
+    });
+  }
+
   // Index magnitude → tens (optional), units, dot+tenths drawn tight together.
-  // We mask the template's faint pre-printed "." first so our own decimal
-  // point sits flush against the tenths digit with no visual gap.
   function writeIndex(v, top, opts = {}) {
     const size = opts.size || 8.5;
     const f = opts.bold ? fontBold : font;
     const color = opts.color || blue;
     const cells = opts.cells || idxCells(v);
-    const abs = Math.abs(v);
-    const intPart = Math.floor(abs + 1e-6);
-    const tenths = Math.round(abs * 10) % 10;
+    const {
+      intPart,
+      tenths
+    } = splitTenths(v);
     const tens = intPart >= 10 ? String(Math.floor(intPart / 10)) : "";
     const units = String(intPart % 10);
     const baseY = y(top) - size * 0.34;
@@ -2996,38 +3035,21 @@ async function buildAndDownloadPdf(data) {
         color
       });
     }
-    // mask the template's printed dot in cell 2 before drawing our own
-    page.drawRectangle({
-      x: cells[2] + 0.8,
-      y: y(top) - size * 0.62,
-      width: cells[3] - cells[2] - 1.6,
-      height: size * 0.85,
-      color: white
-    });
-    const dotStr = "." + tenths;
-    const dw = f.widthOfTextAtSize(dotStr, size);
-    const dotSpan = cells[3] - cells[2];
-    const dotX = cells[2] + (dotSpan - dw) / 2 - 1; // nudge slightly left, tight against units digit
-    page.drawText(dotStr, {
-      x: dotX,
-      y: baseY,
-      size,
-      font: f,
-      color
-    });
+    drawMaskedDot(cells, top, size, f, color, tenths, baseY);
   }
 
   // For boxes with a single (not split +/-) column that need an explicit sign
   // character — e.g. the Landing Index calculation box. Sign+integer part is
   // drawn as one right-aligned block ending at the cell-2 boundary; the decimal
-  // part is masked+redrawn tight, same technique as writeIndex above.
+  // part uses the same masked-dot technique as writeIndex above.
   function writeSignedIndex(v, top, cells, opts = {}) {
     const size = opts.size || 8;
     const f = opts.bold ? fontBold : font;
     const color = opts.color || blue;
-    const abs = Math.abs(v);
-    const intPart = Math.floor(abs + 1e-6);
-    const tenths = Math.round(abs * 10) % 10;
+    const {
+      intPart,
+      tenths
+    } = splitTenths(v);
     const baseY = y(top) - size * 0.34;
     const signedInt = (v >= 0 ? "+" : "-") + intPart;
     const w = f.widthOfTextAtSize(signedInt, size);
@@ -3038,24 +3060,7 @@ async function buildAndDownloadPdf(data) {
       font: f,
       color
     });
-    page.drawRectangle({
-      x: cells[2] + 0.8,
-      y: y(top) - size * 0.62,
-      width: cells[3] - cells[2] - 1.6,
-      height: size * 0.85,
-      color: white
-    });
-    const dotStr = "." + tenths;
-    const dw = f.widthOfTextAtSize(dotStr, size);
-    const dotSpan = cells[3] - cells[2];
-    const dotX = cells[2] + (dotSpan - dw) / 2 - 1;
-    page.drawText(dotStr, {
-      x: dotX,
-      y: baseY,
-      size,
-      font: f,
-      color
-    });
+    drawMaskedDot(cells, top, size, f, color, tenths, baseY);
   }
 
   // ---- HEADER ----
@@ -3450,18 +3455,18 @@ function App() {
   const totalFuelN = Number(totalFuel) || 0;
   const taxiFuelN = Number(taxiFuel) || 0;
   const rampW = zfw + totalFuelN;
-  const fuelIdxTotal = fuelIndex(totalFuelN);
+  const fuelIdxTotal = tableIndex(RAW_FUEL_TABLE, totalFuelN);
   const rampI = zfi + fuelIdxTotal;
 
   // ---- TAKEOFF ----
   const tow = rampW - taxiFuelN;
-  const taxiFuelIdx = fuelIndex(taxiFuelN);
+  const taxiFuelIdx = tableIndex(RAW_FUEL_TABLE, taxiFuelN);
   const toi = rampI - taxiFuelIdx; // burn off taxi fuel index contribution
 
   // ---- LANDING (different method: Index at ZFW ± Landing Fuel Index = Index at LW) ----
   const tripFuelN = Number(tripFuel) || 0;
   const landingFuelW = Math.max(totalFuelN - taxiFuelN - tripFuelN, 0);
-  const landingFuelIdx = fuelIndex(landingFuelW);
+  const landingFuelIdx = tableIndex(RAW_FUEL_TABLE, landingFuelW);
   const lw = zfw + landingFuelW;
   const li = zfi + landingFuelIdx; // Index at ZFW ± Landing Fuel Index
 
@@ -3491,6 +3496,45 @@ function App() {
         }
       };
     });
+  };
+
+  // Quick actions: fill every cabin zone to its max seat capacity (adults only),
+  // or clear all zones back to zero — for fast "full load" what-if scenarios.
+  const fillFullSeating = () => {
+    setZonePax(Object.fromEntries(Object.entries(PAX_ZONES).map(([zone, z]) => [zone, {
+      adult: z.maxPax,
+      child: 0,
+      infant: 0
+    }])));
+  };
+  const clearAllSeating = () => {
+    setZonePax(Object.fromEntries(Object.keys(PAX_ZONES).map(zone => [zone, {
+      adult: 0,
+      child: 0,
+      infant: 0
+    }])));
+  };
+
+  // Distributes `planAdult` passengers (entered in step 3) evenly across the
+  // 5 cabin zones, respecting each zone's max capacity. Simple round-robin:
+  // add 1 passenger at a time to the zone with the most free seats, until
+  // either everyone is seated or the whole cabin is full.
+  const evenDistributeSeating = () => {
+    const total = Math.max(0, Math.floor(planAdult) || 0);
+    const zones = Object.keys(PAX_ZONES);
+    const counts = Object.fromEntries(zones.map(z => [z, 0]));
+    let remaining = total;
+    while (remaining > 0) {
+      const target = zones.filter(z => counts[z] < PAX_ZONES[z].maxPax).sort((a, b) => PAX_ZONES[a].maxPax - counts[a] < PAX_ZONES[b].maxPax - counts[b] ? 1 : -1)[0];
+      if (!target) break; // cabin full, can't seat the rest
+      counts[target]++;
+      remaining--;
+    }
+    setZonePax(Object.fromEntries(zones.map(z => [z, {
+      adult: counts[z],
+      child: 0,
+      infant: 0
+    }])));
   };
 
   // totals across all zones, by pax type (for plan reconciliation)
@@ -3662,44 +3706,14 @@ function App() {
     type: "number",
     min: "0",
     max: "40000",
-    value: dowText,
-    onChange: e => {
-      const text = e.target.value;
-      setDowText(text);
-      const v = Number(text);
-      if (!isNaN(v)) {
-        setDow(v);
-        saveSetting("rrj_dow", v);
-      }
-    },
-    onBlur: () => {
-      const clamped = Math.min(40000, Math.max(0, Number(dowText) || 0));
-      setDow(clamped);
-      setDowText(String(clamped));
-      saveSetting("rrj_dow", clamped);
-    }
+    ...textBufferField(dowText, setDowText, setDow, "rrj_dow", v => Math.min(40000, Math.max(0, v)))
   })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", null, "DOI"), /*#__PURE__*/React.createElement("input", {
     type: "number",
     step: "0.1",
-    value: doiText,
-    onChange: e => {
-      const text = e.target.value;
-      setDoiText(text);
-      const v = Number(text);
-      if (!isNaN(v)) {
-        setDoi(v);
-        saveSetting("rrj_doi", v);
-      }
-    },
-    onBlur: () => {
-      const clean = Number(doiText) || 0;
-      setDoi(clean);
-      setDoiText(String(clean));
-      saveSetting("rrj_doi", clean);
-    }
+    ...textBufferField(doiText, setDoiText, setDoi, "rrj_doi", v => v)
   }))), /*#__PURE__*/React.createElement("div", {
     className: "helper"
-  }, "DOW/DOI задаются вручную (база появится позже). Хранятся между сессиями."), /*#__PURE__*/React.createElement("button", {
+  }, "DOW/DOI задаются вручную или подставляются из вкладки «DOW/DOI». Хранятся между сессиями."), /*#__PURE__*/React.createElement("button", {
     className: "collapsible-toggle",
     onClick: () => setSettingsOpen(s => !s)
   }, settingsOpen ? "▾" : "▸", " Стандартные веса пассажиров"), settingsOpen && /*#__PURE__*/React.createElement("div", {
@@ -3838,11 +3852,23 @@ function App() {
     className: "tlabel"
   }, "Compartments subtotal"), /*#__PURE__*/React.createElement("div", {
     className: "tval"
-  }, fmtKg(cargoTotalW), /*#__PURE__*/React.createElement("span", {
-    className: "unit"
-  }, "kg"), " \xA0 ", cargoTotalI >= 0 ? "+" : "", fmt1(cargoTotalI))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(WeightIndex, {
+    w: cargoTotalW,
+    i: cargoTotalI
+  }))), /*#__PURE__*/React.createElement("div", {
     className: "helper"
   }, "DOW + груз войдёт в DEAD LOAD TOTAL ниже.")), /*#__PURE__*/React.createElement("div", {
+    className: "quickrow"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "quickbtn",
+    onClick: fillFullSeating
+  }, "👥 Полная рассадка (", TOTAL_SEAT_CAPACITY, " чел.)"), /*#__PURE__*/React.createElement("button", {
+    className: "quickbtn",
+    onClick: evenDistributeSeating
+  }, "⚖ Равномерная рассадка (", planAdult || 0, " чел.)"), /*#__PURE__*/React.createElement("button", {
+    className: "quickbtn quickbtn-clear",
+    onClick: clearAllSeating
+  }, "✕")), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
@@ -3894,9 +3920,10 @@ function App() {
     }
   }, "DEAD LOAD TOTAL (накопительно: DRY OP + пассажиры · ", paxTotalCount, " чел.)"), /*#__PURE__*/React.createElement("div", {
     className: "tval"
-  }, fmtKg(deadLoadW), /*#__PURE__*/React.createElement("span", {
-    className: "unit"
-  }, "kg"), " \xA0 ", deadLoadI >= 0 ? "+" : "", fmt1(deadLoadI)))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(WeightIndex, {
+    w: deadLoadW,
+    i: deadLoadI
+  })))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("h2", null, /*#__PURE__*/React.createElement("span", {
     className: "step"
@@ -3910,9 +3937,10 @@ function App() {
     className: "tlabel"
   }, "ZFW / ZFI"), /*#__PURE__*/React.createElement("div", {
     className: "tval"
-  }, fmtKg(zfw), /*#__PURE__*/React.createElement("span", {
-    className: "unit"
-  }, "kg"), " \xA0 ", zfi >= 0 ? "+" : "", fmt1(zfi))), /*#__PURE__*/React.createElement(LimitLine, {
+  }, /*#__PURE__*/React.createElement(WeightIndex, {
+    w: zfw,
+    i: zfi
+  }))), /*#__PURE__*/React.createElement(LimitLine, {
     label: "ZFW",
     value: zfw,
     limit: LIMITS.ZFW,
@@ -3956,9 +3984,10 @@ function App() {
     className: "tlabel"
   }, "RAMP/TAXI"), /*#__PURE__*/React.createElement("div", {
     className: "tval"
-  }, fmtKg(rampW), /*#__PURE__*/React.createElement("span", {
-    className: "unit"
-  }, "kg"), " \xA0 ", rampI >= 0 ? "+" : "", fmt1(rampI))), /*#__PURE__*/React.createElement(LimitLine, {
+  }, /*#__PURE__*/React.createElement(WeightIndex, {
+    w: rampW,
+    i: rampI
+  }))), /*#__PURE__*/React.createElement(LimitLine, {
     label: "RAMP",
     value: rampW,
     limit: LIMITS.RAMP,
@@ -3972,9 +4001,10 @@ function App() {
     }
   }, "TAKEOFF (TOW / TOI)"), /*#__PURE__*/React.createElement("div", {
     className: "tval"
-  }, fmtKg(tow), /*#__PURE__*/React.createElement("span", {
-    className: "unit"
-  }, "kg"), " \xA0 ", toi >= 0 ? "+" : "", fmt1(toi))), /*#__PURE__*/React.createElement(LimitLine, {
+  }, /*#__PURE__*/React.createElement(WeightIndex, {
+    w: tow,
+    i: toi
+  }))), /*#__PURE__*/React.createElement(LimitLine, {
     label: "TOW",
     value: tow,
     limit: LIMITS.TOW,
@@ -4034,9 +4064,10 @@ function App() {
     }
   }, "LANDING (LW / LI)"), /*#__PURE__*/React.createElement("div", {
     className: "tval"
-  }, fmtKg(lw), /*#__PURE__*/React.createElement("span", {
-    className: "unit"
-  }, "kg"), " \xA0 ", li >= 0 ? "+" : "", fmt1(li))), /*#__PURE__*/React.createElement(LimitLine, {
+  }, /*#__PURE__*/React.createElement(WeightIndex, {
+    w: lw,
+    i: li
+  }))), /*#__PURE__*/React.createElement(LimitLine, {
     label: "LW",
     value: lw,
     limit: LIMITS.LW,
@@ -4110,7 +4141,7 @@ function App() {
     rel: "noopener noreferrer"
   }, "📄 Открыть PDF"))), /*#__PURE__*/React.createElement("div", {
     className: "footer-note"
-  }, "Этап 1 (MVP): расчёт индексов по таблицам RA-89180/186/189/191 + экспорт в PDF.", /*#__PURE__*/React.createElement("br", null), "%MAC-график, стабилизатор и авторассадка — следующие этапы.")));
+  }, "Расчёт индексов по официальным таблицам, живой центровочный график, расчёт STAB TO (FLAP 1+F/2/3) и экспорт в заполненный бланк Trim Sheet.")));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
 </script>
