@@ -235,6 +235,11 @@
   .footer-note{
     text-align:center;font-size:10.5px;color:var(--text2);margin-top:18px;line-height:1.6;
   }
+  .disclaimer{
+    margin-top:14px;margin-bottom:24px;padding:12px 14px;
+    border:1px solid var(--border);border-radius:8px;
+    font-size:10px;color:var(--text2);line-height:1.65;opacity:0.75;
+  }
 </style>
 </head>
 <body>
@@ -4141,7 +4146,9 @@ function App() {
     rel: "noopener noreferrer"
   }, "📄 Открыть PDF"))), /*#__PURE__*/React.createElement("div", {
     className: "footer-note"
-  }, "Расчёт индексов по официальным таблицам, живой центровочный график, расчёт STAB TO (FLAP 1+F/2/3) и экспорт в заполненный бланк Trim Sheet.")));
+  }, "Расчёт индексов по официальным таблицам, живой центровочный график, расчёт STAB TO (FLAP 1+F/2/3) и экспорт в заполненный бланк Trim Sheet."), /*#__PURE__*/React.createElement("div", {
+    className: "disclaimer"
+  }, "⚠ Данное приложение является неофициальным учебно-вспомогательным инструментом и не имеет авиационной сертификации. Оно не заменяет и не отменяет обязательного использования официально утверждённой документации, сертифицированного программного обеспечения и установленных процедур эксплуатанта. Автор не несёт никакой ответственности за любые последствия прямого или косвенного использования данного приложения при планировании или выполнении полётов.")));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
 </script>
